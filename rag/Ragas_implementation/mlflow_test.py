@@ -8,7 +8,6 @@ from ragas.metrics import AspectCritic
 from ragas.metrics import LLMContextPrecisionWithoutReference
 from langchain_community.chat_models import ChatOpenAI
 from langchain_huggingface import HuggingFaceEmbeddings
-import asyncio
 from langchain_openai import ChatOpenAI
 
 load_dotenv()
