@@ -10,3 +10,4 @@ torch
 dotenv
 langchain-openai
 ragas
+mlflow

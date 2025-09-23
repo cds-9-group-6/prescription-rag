@@ -40,7 +40,7 @@ Context Precision is a metric that evaluates the retriever’s ability to rank r
 
 - RAG_Evaluation class implements the metrics.
 
-- log_single_turn_sample logs results to MLflow.
+- log_single_turn_sample under the RAG_Evaluation class logs results to MLflow.
 
 
 The mlflow_test code: uses RAG_Evaluation class where all the 4 metrics are defined and uses the log_single_turn_sample function to log the experiments into the mlflow server. 
