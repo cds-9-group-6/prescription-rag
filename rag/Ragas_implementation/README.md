@@ -55,3 +55,5 @@ To start the MLflow server run - mlflow ui
 Set your OpenAI API key in environment variables:
 
 export OPENAI_API_KEY="your-key-here" or use a .env file
+
+Run the rag_with_ollama_mod.py file to run the test
