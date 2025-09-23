@@ -43,11 +43,11 @@ Context Precision is a metric that evaluates the retriever’s ability to rank r
 - log_single_turn_sample under the RAG_Evaluation class logs results to MLflow.
 
 
-The mlflow_test code: uses RAG_Evaluation class where all the 4 metrics are defined and uses the log_single_turn_sample function to log the experiments into the mlflow server. 
+The mlflow_test.py code: uses RAG_Evaluation class where all the 4 metrics are defined and uses the log_single_turn_sample function to log the experiments into the mlflow server. 
 
-The rag_with_ollama_mod code: integrates the RAG_Evaluation class with the Retriever.
+The rag_with_ollama_mod.py code: Uses the RAG_Evaluation class with the Retriever. This file imports from the mlflow_test.py 
 
-The rag_with_ollama_augmented code: is a modification on the Retriver logic which integrates with the RAG_Evaluation class.
+The rag_with_ollama_augmented.py code: is a modification on the Retriver logic which integrates with the RAG_Evaluation class.
 
 
 To start the MLflow server run - mlflow ui
