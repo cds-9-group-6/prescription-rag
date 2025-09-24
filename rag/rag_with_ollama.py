@@ -53,6 +53,9 @@ class OllamaRag:
     
     # Default collections to initialize (most common plant types)
     DEFAULT_COLLECTIONS = ['Tomato', 'Potato', 'Rice', 'Wheat', 'Corn']
+
+    # Default available collections to initialize (most common plant types)
+    DEFAULT_COLLECTIONS = ['Apple', 'Coconut', 'Paddy_Dhan', 'Potato', 'Tomato']
     
     # Creating the Prompt Template
     prompt_template = """
@@ -282,7 +285,8 @@ class OllamaRag:
                 disease.lower().replace('_', ' ').title(),  # Handle Black_rot -> Black Rot
                 disease.lower().replace(' ', '_')           # Handle Black Rot -> black_rot
             ]
-            conditions.append({"Disease": {"$in": disease_variations}})
+            # Disease
+            conditions.append({"disease_name": {"$in": disease_variations}})
             logger.debug(f"🦠 Disease filter: {disease_variations}")
         
         # Return None if no conditions

@@ -1,55 +1,115 @@
 # Retrieval-Augmented Generation (RAG)
 
-This repository contains notebooks for creating embeddings, building a vector database, and running RAG (Retrieval-Augmented Generation) using both **Groq API** and **Hugging Face**.  
+This repository contains files on running RAG (Retrieval-Augmented Generation).
+
+It contains files such as:
+
+- **Rag_with_groq.ipynb** for running the rag notebook using Groq api
+
+- **Rag_huggingface.ipynb** for running the rag notebook using Hugging face.
+
+- **test_metadata_filtering_example.py** to test the various metadata inputs for the retiever system.
+
+- **test_chromadb.py** to test the retiever on obtaining documents for a given collection.
+
+- **run_api.sh** to run the "🚀Starting Prescription RAG API Server".
+
+- **Dockerfile.ollama** Docker file to build the ollama image of the models of your choice, to be run as a container.
+
+- **Dockerfile.chroma_with_data_e5large** Docker file of the Chroma db image, to be run as a container
+
+It contains folders such as:
+
+  - **rag** which contains the Ragas_implementation folder
+  - **docker** Refernce folder containing full docker implementation of connecting ollama with chroma db and test_chromadb fast api app
+  - **api** A FastAPI-based REST API for the Agricultural Advisory RAG (Retrieval-Augmented Generation) system using Ollama.
+
+**Notebooks**
+  - Rag_huggingface.ipynb → Run RAG using Hugging Face (no API key required)
+
+**Tests**
+  - test_metadata_filtering_example.py → Test metadata inputs for the retriever
+
+  - test_chromadb.py → Test document retrieval from a ChromaDB collection
+
+**APIs & Scripts**
+  - run_api.sh → Start the Prescription RAG API Server
+
+  - rag_with_ollama_fastapi.py → Run the RAG FastAPI app with Ollama
+
+**Docker**
+  - Dockerfile.ollama → Build an Ollama model image
+
+  - Dockerfile.chroma_with_data_e5large → Build a ChromaDB image with embeddings
+
+**Folders**
+  - rag/ → Contains Ragas_implementation
+
+  - docker/ → Reference implementations (Ollama + ChromaDB + FastAPI)
+
+  - api/ → FastAPI-based REST API for Agricultural Advisory RAG
 
 ---
 
 ## 📂 Files in this Repository  
 
-### 1. `Embedding_creation.ipynb`  
-- Handles preprocessing of cleaned data.  
-- Creates embeddings.  
-- Inserts chunks into the vector database for retrieval.  
+  - ✅ To run this notebook:  
+
+### 1. `Rag_huggingface.ipynb`  
+  - Requires the **`chroma_capstone_db_new_reduced_hugging_face`** vector database.  
+  - Simply run the notebook to start the RAG pipeline.  
+
+### 2. Running with Ollama on your system
+  - cd into the rag folder
+  - run the Fast-api app: rag_with_ollama_fastapi.py
+  - Requires the **`chroma_capstone_db_new_reduced_hugging_face`** vector database.  
+  
+Two files are required, which support the running of the ollama RAG program files: The requirements.txt(Requirements file) and   chroma_capstone_db_new_reduced_hugging_face 
 
 ---
+## Setup Instructions
 
-### 2. `Rag_with_groq.ipynb`  
-- Runs the RAG pipeline using the **Groq API**.  
-- Requires a **Groq API key**:  
-  - You can create one by signing up at [Groq](https://groq.com).  
-  - An existing API key is already placed in the **Amit** folder of the shared drive inside the `.env` file.  
-- Requires the **`chroma_capstone_db_new`** vector database.  
-- ✅ To run this notebook:  
-  1. Place the `.env` file in the same folder.  
-  2. Ensure the vector database is available.  
-  3. Execute the notebook cells.  
+### 1. Prepare the Vector Database
 
----
+  - Create a folder on your local machine.
 
-### 3. `Rag_huggingface.ipynb`  
-- Similar to `Rag_with_groq.ipynb`.  
-- Does **not** require a Groq API key.  
-- Simply run the notebook to start the RAG pipeline.  
+  - Place the four ChromaDB files inside this folder.
 
-### 4. Running with Ollama on your system
+### 2. Set Up a Virtual Environment
 
-- Two files have been created for running ollama with RAG:
-    - The first is a fast-api app: rag_with_ollama_fastapi.py
-    - The second is a normal Python file to be integrated into the agent flow: rag_with_ollama.py
-- Two files are required, which support the running of the ollama RAG program files: The requirements.txt(Requirements file) and chroma_capstone_db_new (Vector database)
-- Create a folder on your local desktop and place the four files under your folder. 
-- Create a virtual environment using a Python version 3.10 or greater.
-- Once virtual environment is created, cd into your virtual_environment_file/scripts and activate your virtual environment
-- After activation, cd.. back into your local parent folder and run the command in your command prompt pip install -r requirements.txt
-- Once all the packages are installed, you can now run both rag_with_ollama.py, rag_with_ollama_fastapi.py
+  - Ensure you have Python 3.10+ installed.
 
----
+  - Create and activate a virtual environment:
 
-## ⚙️ Requirements  
-- Python 3.10+  
-- Install dependencies:  
+    ```bash
+    python -m venv venv
+    source venv/bin/activate   # On macOS/Linux
+    venv\Scripts\activate      # On Windows
+    ``` 
+
+
+### 3. Install Dependencies
+
+  - From the project’s parent folder, run:
+
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+
+### 4. Run RAG
+
+  - You can now run either of the following:
+
   ```bash
-  pip install -r requirements.txt
+  python rag_with_ollama_fastapi.py
+  ```
+  or open in Jupyter:
+
+  ```bash
+  jupyter notebook Rag_huggingface.ipynb
+  ```
+---
 
 
 
