@@ -2,28 +2,6 @@
 
 This repository contains files on running RAG (Retrieval-Augmented Generation).
 
-It contains files such as:
-
-- **Rag_with_groq.ipynb** for running the rag notebook using Groq api
-
-- **Rag_huggingface.ipynb** for running the rag notebook using Hugging face.
-
-- **test_metadata_filtering_example.py** to test the various metadata inputs for the retiever system.
-
-- **test_chromadb.py** to test the retiever on obtaining documents for a given collection.
-
-- **run_api.sh** to run the "🚀Starting Prescription RAG API Server".
-
-- **Dockerfile.ollama** Docker file to build the ollama image of the models of your choice, to be run as a container.
-
-- **Dockerfile.chroma_with_data_e5large** Docker file of the Chroma db image, to be run as a container
-
-It contains folders such as:
-
-  - **rag** which contains the Ragas_implementation folder
-  - **docker** Refernce folder containing full docker implementation of connecting ollama with chroma db and test_chromadb fast api app
-  - **api** A FastAPI-based REST API for the Agricultural Advisory RAG (Retrieval-Augmented Generation) system using Ollama.
-
 **Notebooks**
   - Rag_huggingface.ipynb → Run RAG using Hugging Face (no API key required)
 
@@ -40,7 +18,7 @@ It contains folders such as:
 **Docker**
   - Dockerfile.ollama → Build an Ollama model image
 
-  - Dockerfile.chroma_with_data_e5large → Build a ChromaDB image with embeddings
+  - Dockerfile.chroma_with_data_e5large → Build a ChromaDB image
 
 **Folders**
   - rag/ → Contains Ragas_implementation
@@ -69,11 +47,11 @@ Two files are required, which support the running of the ollama RAG program file
 ---
 ## Setup Instructions
 
-### 1. Prepare the Vector Database
+### 1. Prepare the Folders
 
   - Create a folder on your local machine.
 
-  - Place the four ChromaDB files inside this folder.
+  - Place the vector database chroma_capstone_db_new_reduced_hugging_face, requirements.txt and file of your choice rag_with_ollama_fastapi.py or   Rag_huggingface.ipynb
 
 ### 2. Set Up a Virtual Environment
 
