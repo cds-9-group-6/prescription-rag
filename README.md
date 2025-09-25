@@ -114,3 +114,14 @@ The vector database in two ways:
 
 ## <TODO> How to setup the local environment for development
 
+
+
+## commands to deploy in local
+ollama is running as a native app on macbook
+
+podman run -d --name chromadb  -p 8000:8000 quay.io/rajivranjan/chromadb-with-data-arm64:v1
+
+> note the .env is cruicial to make everytihng work end to end
+
+podman run -it  --name prescription  --env-file=.env -p 8081:8081 quay.io/rajivranjan/prescription:arm64-v1
+

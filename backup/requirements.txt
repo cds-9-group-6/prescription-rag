@@ -1,0 +1,20 @@
+pandas
+langchain_chroma
+# langchain_groq
+langchain
+langchain-community
+langchain_ollama
+# langchain_huggingface
+# unable to load below library while running docker image build
+# HuggingFaceEmbeddings
+sentence-transformers
+# transformers
+# torch
+# dotenv
+fastapi
+pydantic
+uvicorn
+chromadb
+langchain-openai
+ragas
+mlflow

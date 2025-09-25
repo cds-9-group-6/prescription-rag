@@ -98,7 +98,10 @@ def main():
     
     # Configuration
     base_url = "http://localhost:8081"  # Default from start_server.py
-    
+    # base_url = "http://169.254.173.110:8081"
+    # base_url = "http://192.168.0.100:8081"
+    # base_url = "http://127.0.0.1:8081"
+
     print("🚀 Prescription RAG API - Query Endpoint Tester")
     print(f"   Target URL: {base_url}")
     print("=" * 60)
@@ -149,38 +152,38 @@ def main():
     )
 
 
-    # # Test 2: Potato pest management
-    # tester.test_query(
-    #     query="How to control potato blight disease?",
-    #     plant_type="Potato",
-    #     location="Punjab"
-    # )
+    # Test 2: Potato pest management
+    tester.test_query(
+        query="How to control potato blight disease?",
+        plant_type="Potato",
+        location="Punjab"
+    )
     
-    # # Test 3: Rice with auto plant detection
-    # tester.test_query(
-    #     query="My rice crops are showing brown spots on leaves. What should I do?",
-    #     season="Kharif"
-    # )
+    # Test 3: Rice with auto plant detection
+    tester.test_query(
+        query="My rice crops are showing brown spots on leaves. What should I do?",
+        season="Kharif"
+    )
     
-    # # Test 4: Apple pest query
-    # tester.test_query(
-    #     query="Apple scab prevention and treatment methods",
-    #     plant_type="Apple",
-    #     disease="scab"
-    # )
+    # Test 4: Apple pest query
+    tester.test_query(
+        query="Apple scab prevention and treatment methods",
+        plant_type="Apple",
+        disease="scab"
+    )
     
-    # # Test 5: Coconut disease with location
-    # tester.test_query(
-    #     query="Coconut palm diseases in coastal areas",
-    #     plant_type="Coconut",
-    #     location="Kerala",
-    #     season="Monsoon"
-    # )
+    # Test 5: Coconut disease with location
+    tester.test_query(
+        query="Coconut palm diseases in coastal areas",
+        plant_type="Coconut",
+        location="Kerala",
+        season="Monsoon"
+    )
     
-    # # Test 6: General agricultural query
-    # tester.test_query(
-    #     query="Organic farming pest management strategies"
-    # )
+    # Test 6: General agricultural query
+    tester.test_query(
+        query="Organic farming pest management strategies"
+    )
     
     print("\n" + "=" * 60)
     print("✅ All query tests completed!")
