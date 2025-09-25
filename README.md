@@ -119,11 +119,24 @@ The vector database in two ways:
 
 
 ## commands to deploy in local
+
+1. Ollama with llama3.1:8b
 ollama is running as a native app on macbook
 
+2. Chromadb
+
+```bash
 podman run -d --name chromadb  -p 8000:8000 quay.io/rajivranjan/chromadb-with-data-arm64:v1
+```
+
+3. Prescription
 
 > note the .env is cruicial to make everytihng work end to end
 
-podman run -it  --name prescription  --env-file=.env -p 8081:8081 quay.io/rajivranjan/prescription:arm64-v1
+```bash
+# if cache dir exists in local laptop
+podman run -it  --name prescription  --env-file=.env -v ~/.cache/huggingface:/root/.cache/huggingface:Z -p 8081:8081 quay.io/rajivranjan/prescription:arm64-v1.1
 
+# if cache dir doesn't exists
+podman run -it  --name prescription  --env-file=.env -v huggingface-cache:/root/.cache/huggingface -p 8081:8081 quay.io/rajivranjan/prescription:arm64-v1.1
+```
