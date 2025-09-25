@@ -23,6 +23,11 @@ from .models import (
     CollectionInfo
 )
 
+from .treatment_models import (
+    StructuredTreatmentResponse,
+    StructuredTreatmentQueryResponse
+)
+
 # Import the OllamaRag class
 import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
@@ -285,6 +290,91 @@ async def query_with_sources(request: QueryRequest):
         )
 
 
+@app.post("/query/treatment", response_model=StructuredTreatmentQueryResponse)
+async def get_structured_treatment(request: QueryRequest):
+    """Run a query and return structured treatment information in JSON format."""
+    if not rag_system:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="RAG system not initialized"
+        )
+    
+    try:
+        # Run the structured treatment query
+        result = rag_system.run_structured_treatment_query(
+            query_request=request.query,
+            plant_type=request.plant_type,
+            season=request.season,
+            location=request.location,
+            disease=request.disease
+        )
+        
+        if not result["success"]:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Structured treatment query failed: {result.get('error', 'Unknown error')}"
+            )
+        
+        # Check if parsing was successful
+        if not result["parsing_success"] or not result["treatment_data"]:
+            # Return raw response for debugging if parsing failed
+            return StructuredTreatmentQueryResponse(
+                treatment=None,
+                collection_used=result["collection_used"],
+                query_time=result["query_time"],
+                success=False,
+                raw_response=result["raw_response"],
+                parsing_success=result["parsing_success"]
+            )
+        
+        # Validate and create structured response
+        try:
+            # Handle special cases in the data before validation
+            treatment_data = result["treatment_data"].copy()
+            
+            # Handle "Not applicable" secondary treatment
+            if (treatment_data.get("medicine_recommendations", {}).get("secondary_treatment", {}).get("medicine_name") == "Not applicable"):
+                treatment_data["medicine_recommendations"]["secondary_treatment"] = None
+            
+            # Ensure organic_alternatives is a list
+            if "medicine_recommendations" in treatment_data:
+                med_rec = treatment_data["medicine_recommendations"]
+                if "organic_alternatives" not in med_rec:
+                    med_rec["organic_alternatives"] = []
+            
+            treatment_response = StructuredTreatmentResponse(**treatment_data)
+            
+            return StructuredTreatmentQueryResponse(
+                treatment=treatment_response,
+                collection_used=result["collection_used"],
+                query_time=result["query_time"],
+                success=True,
+                raw_response=result["raw_response"],
+                parsing_success=result["parsing_success"]
+            )
+            
+        except Exception as validation_error:
+            logger.error(f"Treatment response validation failed: {validation_error}")
+            logger.error(f"Treatment data: {result['treatment_data']}")
+            
+            # Return with detailed error information for debugging
+            return StructuredTreatmentQueryResponse(
+                treatment=None,
+                collection_used=result["collection_used"],
+                query_time=result["query_time"],
+                success=False,
+                raw_response=f"Validation Error: {str(validation_error)}\n\nOriginal Response: {result['raw_response']}",
+                parsing_success=False
+            )
+        
+    except Exception as e:
+        logger.error(f"Structured treatment query failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Structured treatment query failed: {str(e)}"
+        )
+
+
 @app.get("/collections/info", response_model=CollectionsInfoResponse)
 async def get_collection_info():
     """Get information about all initialized collections."""
@@ -353,6 +443,7 @@ async def root():
             "POST /query - Basic query",
             "POST /query/metrics - Query with metrics", 
             "POST /query/sources - Query with source documents",
+            "POST /query/treatment - Structured treatment recommendations",
             "GET /collections - List available collections",
             "GET /collections/info - Detailed collection information",
             "GET /health - Health check"
@@ -375,3 +466,5 @@ if __name__ == "__main__":
         reload=False,  # Set to True for development
         log_level="info"
     )
+
+

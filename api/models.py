@@ -69,3 +69,5 @@ class HealthResponse(BaseModel):
     available_collections: List[str] = Field(..., description="List of available collections")
     total_collections: int = Field(..., description="Total number of collections")
     timestamp: str = Field(..., description="Current timestamp")
+
+
