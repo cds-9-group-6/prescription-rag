@@ -1,5 +1,7 @@
 # Retrieval-Augmented Generation (RAG)
 
+## 📂 Files in this Repository  
+
 This repository contains files on running RAG (Retrieval-Augmented Generation).
 
 **Notebooks**
@@ -21,7 +23,7 @@ This repository contains files on running RAG (Retrieval-Augmented Generation).
   - Dockerfile.chroma_with_data_e5large → Build a ChromaDB image
 
 **Folders**
-  - rag/ → Contains Ragas_implementation
+  - rag/ → Contains Ragas_implementation and rag_with_ollama_api.py file
 
   - docker/ → Reference implementations (Ollama + ChromaDB + FastAPI)
 
@@ -29,20 +31,33 @@ This repository contains files on running RAG (Retrieval-Augmented Generation).
 
 ---
 
-## 📂 Files in this Repository  
-
-  - ✅ To run this notebook:  
-
 ### 1. `Rag_huggingface.ipynb`  
-  - Requires the **`chroma_capstone_db_new_reduced_hugging_face`** vector database.  
-  - Simply run the notebook to start the RAG pipeline.  
+  - ✅ To run the notebook:  
+
+  - install the requirements.txt(Requirements file)
+  - Requires the **`chroma_capstone_db_new_reduced_hugging_face`** vector database.
+  - Run the notebook for the RAG.  
 
 ### 2. Running with Ollama on your system
-  - cd into the rag folder
-  - run the Fast-api app: rag_with_ollama_fastapi.py
-  - Requires the **`chroma_capstone_db_new_reduced_hugging_face`** vector database.  
-  
-Two files are required, which support the running of the ollama RAG program files: The requirements.txt(Requirements file) and   chroma_capstone_db_new_reduced_hugging_face 
+   - ✅ To run the python file: 
+
+   - Create the folder for RAG
+   - install ollama and pull the model of your choice
+   - install the requirements.txt(Requirements file)
+   - Requires the **`chroma_capstone_db_new_reduced_hugging_face`** vector database.
+   - run the Fast-api app: rag_with_ollama_fastapi.py (the file is located under RAG of the same repository)
+
+
+The vector database in two ways:
+### 1. Using Docker
+
+  ```bash
+  docker pull amit1994/chromadb_small_huggingface
+  ```
+### 2. From Google Drive
+
+  [Google Drive Folder](https://drive.google.com/drive/u/0/folders/1vM6zUKWw-AhbEef4_KbRSJwc80vloXcf). 
+  - The file name is chroma_capstone_db_new_reduced_hugging_face.zip
 
 ---
 ## Setup Instructions
@@ -51,11 +66,11 @@ Two files are required, which support the running of the ollama RAG program file
 
   - Create a folder on your local machine.
 
-  - Place the vector database chroma_capstone_db_new_reduced_hugging_face, requirements.txt and file of your choice rag_with_ollama_fastapi.py or   Rag_huggingface.ipynb
+  - Place the vector database chroma_capstone_db_new_reduced_hugging_face, requirements.txt and files choice rag_with_ollama_fastapi.py, Rag_huggingface.ipynb
 
 ### 2. Set Up a Virtual Environment
 
-  - Ensure you have Python 3.10+ installed.
+  - Ensure Python 3.10+ is installed.
 
   - Create and activate a virtual environment:
 
