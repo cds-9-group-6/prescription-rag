@@ -15,7 +15,7 @@ from typing import Dict, Any
 class APITester:
     """Test class for API endpoints."""
     
-    def __init__(self, base_url: str = "http://localhost:8080"):
+    def __init__(self, base_url: str = "http://localhost:8081"):
         self.base_url = base_url.rstrip('/')
         self.session = requests.Session()
         self.passed = 0
@@ -178,7 +178,7 @@ def check_server_status(base_url: str) -> bool:
 
 def main():
     """Main test function."""
-    base_url = "http://localhost:8080"
+    base_url = "http://localhost:8081"
     
     # Check if server is running
     print("🔍 Checking if API server is running...")
@@ -206,3 +206,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

@@ -52,14 +52,14 @@ docker run -p 8000:8000 chromadb/chroma
 python -m api.start_server
 
 # Or with uvicorn
-uvicorn api.main:app --host 0.0.0.0 --port 8080
+uvicorn api.main:app --host 0.0.0.0 --port 8081
 ```
 
 The API will be available at:
-- **API Base**: `http://localhost:8080`
-- **Interactive Docs**: `http://localhost:8080/docs`
-- **ReDoc**: `http://localhost:8080/redoc`
-- **Health Check**: `http://localhost:8080/health`
+- **API Base**: `http://localhost:8081`
+- **Interactive Docs**: `http://localhost:8081/docs`
+- **ReDoc**: `http://localhost:8081/redoc`
+- **Health Check**: `http://localhost:8081/health`
 
 ## API Endpoints
 
@@ -127,6 +127,64 @@ Query that returns both answer and source documents.
 }
 ```
 
+#### `POST /query/treatment`
+Get structured treatment recommendations in JSON format with immediate treatment, weekly plans, and medicine recommendations.
+
+**Request:** Same as `/query`
+
+**Response:**
+```json
+{
+  "treatment": {
+    "diagnosis": {
+      "disease_name": "Tomato Blight",
+      "symptoms": ["brown spots on leaves", "wilting", "leaf yellowing"],
+      "severity": "moderate",
+      "affected_parts": ["leaves", "stems"]
+    },
+    "immediate_treatment": {
+      "actions": ["Remove infected leaves", "Improve drainage", "Apply copper fungicide"],
+      "emergency_measures": ["Isolate affected plants"],
+      "timeline": "immediate"
+    },
+    "weekly_treatment_plan": {
+      "week_1": {
+        "actions": ["Apply copper sulfate spray", "Monitor daily"],
+        "monitoring": "Check for new spots and spreading",
+        "expected_results": "Reduction in new spot formation"
+      }
+    },
+    "medicine_recommendations": {
+      "primary_treatment": {
+        "medicine_name": "Copper Sulfate",
+        "active_ingredient": "Copper sulfate pentahydrate",
+        "dosage": "2-3 grams per liter",
+        "application_method": "Foliar spray",
+        "frequency": "Every 7-10 days",
+        "duration": "3-4 weeks",
+        "precautions": ["Avoid spraying in hot sun", "Use protective equipment"]
+      }
+    },
+    "prevention": {
+      "cultural_practices": ["Crop rotation", "Proper spacing"],
+      "crop_management": ["Regular pruning", "Drip irrigation"],
+      "environmental_controls": ["Good air circulation"],
+      "monitoring_schedule": "Weekly during growing season"
+    },
+    "additional_notes": {
+      "weather_considerations": "Avoid spraying during rain",
+      "crop_stage_specific": "More critical during flowering",
+      "regional_considerations": "Monitor humidity in coastal areas",
+      "follow_up": "Contact extension officer if no improvement in 2 weeks"
+    }
+  },
+  "collection_used": "Tomato",
+  "query_time": 3.2,
+  "success": true,
+  "parsing_success": true
+}
+```
+
 ### Collection Management Endpoints
 
 #### `GET /collections`
@@ -183,7 +241,7 @@ Configure the API using environment variables:
 ### API Server Configuration
 ```bash
 export API_HOST="0.0.0.0"          # API server host
-export API_PORT="8080"             # API server port  
+export API_PORT="8081"             # API server port  
 export API_RELOAD="false"          # Enable auto-reload (development)
 export LOG_LEVEL="info"            # Logging level
 ```
@@ -207,7 +265,7 @@ import requests
 import json
 
 # API base URL
-API_BASE = "http://localhost:8080"
+API_BASE = "http://localhost:8081"
 
 # Basic query
 def query_rag(query, plant_type=None, season=None):
@@ -238,10 +296,10 @@ print(f"Sources: {len(sources_result['source_documents'])} documents")
 
 ```bash
 # Health check
-curl -X GET "http://localhost:8080/health"
+curl -X GET "http://localhost:8081/health"
 
 # Basic query
-curl -X POST "http://localhost:8080/query" \
+curl -X POST "http://localhost:8081/query" \
   -H "Content-Type: application/json" \
   -d '{
     "query": "What causes tomato leaf curl?",
@@ -250,15 +308,24 @@ curl -X POST "http://localhost:8080/query" \
   }'
 
 # Query with sources
-curl -X POST "http://localhost:8080/query/sources" \
+curl -X POST "http://localhost:8081/query/sources" \
   -H "Content-Type: application/json" \
   -d '{
     "query": "Best practices for potato farming",
     "location": "Punjab"
   }'
 
+# Structured treatment query
+curl -X POST "http://localhost:8081/query/treatment" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "My tomato plants have blight, need detailed treatment",
+    "plant_type": "Tomato",
+    "season": "Summer"
+  }'
+
 # Get available collections
-curl -X GET "http://localhost:8080/collections"
+curl -X GET "http://localhost:8081/collections"
 ```
 
 ## Supported Plant Types
@@ -310,6 +377,15 @@ export API_RELOAD="true"
 ```bash
 # Run basic functionality test
 python api/test_endpoints.py
+
+# Test /query/metrics endpoint specifically
+./test_query_metrics.sh
+
+# Quick metrics endpoint test
+./quick_test_metrics.sh
+
+# Test structured treatment endpoint
+./test_structured_treatment.py
 ```
 
 ### Docker Deployment
@@ -323,7 +399,7 @@ RUN pip install -r requirements.txt
 
 COPY . .
 
-EXPOSE 8080
+EXPOSE 8081
 CMD ["python", "-m", "api.start_server"]
 ```
 
@@ -344,3 +420,4 @@ CMD ["python", "-m", "api.start_server"]
 ## License
 
 This project is part of the Prescription RAG system for agricultural advisory services.
+

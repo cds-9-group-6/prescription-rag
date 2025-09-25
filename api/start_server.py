@@ -8,9 +8,12 @@ This script provides an easy way to start the FastAPI server with environment va
 import os
 import sys
 import uvicorn
+import dotenv
 
 # Add parent directory to path to import the api module
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+dotenv.load_dotenv()
 
 if __name__ == "__main__":
     # Configuration from environment variables with defaults
@@ -56,3 +59,5 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"❌ Failed to start server: {e}")
         sys.exit(1)
+
+

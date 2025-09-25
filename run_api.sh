@@ -71,3 +71,5 @@ echo ""
 
 # Start the server
 python -m api.start_server
+
+
