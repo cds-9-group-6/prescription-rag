@@ -5,6 +5,7 @@ import os
 from typing import Dict, List, Optional
 
 import chromadb
+# from langchain.chains.retrieval_qa.base import RetrievalQA
 from langchain.chains import RetrievalQA
 from langchain_chroma import Chroma
 from langchain_ollama import ChatOllama
@@ -15,6 +16,9 @@ from langchain.embeddings import HuggingFaceEmbeddings
 # from langchain_community.embeddings import GPT4AllEmbeddings  # Local GPT4All
 # from langchain_community.embeddings import FakeEmbeddings     # For testing only
 from langchain_core.prompts import PromptTemplate
+from langchain_core.prompts import ChatPromptTemplate
+from langchain.chains.combine_documents import create_stuff_documents_chain
+from langchain.chains import create_retrieval_chain
 
 # Configure logging
 logging.basicConfig(
@@ -59,7 +63,7 @@ class OllamaRag:
         You are an agricultural assistant specialized in answering questions about plant diseases.  
         Your task is to provide answers strictly based on the provided context when possible.  
 
-        Each document contains the following fields:  
+        Each document in the context may contain the following fields:  
         - DistrictName  
         - StateName  
         - Season_English  
@@ -83,12 +87,42 @@ class OllamaRag:
         OUTPUT:
         """
 
+    SYSTEM_PROMPT = """
+        You are an agricultural assistant specialized in answering questions about plant diseases.  
+        Your task is to provide answers strictly based on the provided context when possible.  
+
+        Each document in the context may contain the following fields:  
+        - DistrictName  
+        - StateName  
+        - Season_English  
+        - Month  
+        - Disease  
+        - QueryText  
+        - KccAns (this is the official response section from source documents)
+
+        Guidelines for answering:
+        1. If a relevant answer is available in KccAns, use that with minimal changes. 
+        2. Use DistrictName, StateName, Season_English, Month, and Disease only to help interpret the question and select the correct KccAns, but **do not include these details in the final answer unless the question explicitly asks for them**.  
+        3. If you get multiple answers from the context, then give preference to KccAns where StateName, Disease, Season_English, Month is the same as the question. This is also the preference order for the answers.
+        4. If the answer is not available in the context, then rely on your own agricultural knowledge to provide the best possible answer.  
+        5. Do not invent or assume information when KccAns is present; only fall back to your own knowledge when the context has no suitable answer.  
+
+        CONTEXT:
+        {context}
+
+        """
+
+# Additionally mention in your response that you referred to Indian Government's KCC website for the answer which relfects other farmers plan of treatment as well.    
+
     def __init__(self, 
                  llm_name: str, 
                  temperature: float = 0.1, 
                  embedding_model: str = "intfloat/multilingual-e5-large-instruct",  # Ollama embedding model
                  collections_to_init: Optional[List[str]] = None,
-                 persist_directory: str = "./chroma_capstone_db_new_small"):
+                 persist_directory: str = "./chroma_capstone_db_new_small",
+                 vector_store_host_url: str = "localhost:8000",
+                 vector_store_port: int = 8000
+                 ):
         """
         Initialize RAG system with pre-loaded embeddings and retrievers for multiple plant collections.
         
@@ -104,6 +138,14 @@ class OllamaRag:
         # Initialize LLM
         self._initialize_llm(llm_name, temperature)
         
+        # Create application prompt template from system prompt
+        self.APP_PROMPT=ChatPromptTemplate.from_messages([
+            ("system", self.SYSTEM_PROMPT),
+            ("human", "{input}"),
+        ])
+        self.question_answer_chain = create_stuff_documents_chain(self.llm, self.APP_PROMPT)
+
+
         # Initialize prompt template
         self.PROMPT = PromptTemplate(
             template=self.prompt_template, input_variables=["context", "question"]
@@ -125,6 +167,7 @@ class OllamaRag:
         # Pre-initialize all ChromaDB collections and retrievers
         self.chroma_databases: Dict[str, Chroma] = {}
         self.retrievers: Dict[str, RetrievalQA] = {}
+        self.rag_chains: Dict[str, any] = {}
         self._initialize_all_collections()
         
         # Set default collection (fallback)
@@ -133,6 +176,7 @@ class OllamaRag:
         logger.info("✅ Enhanced RAG system initialization completed!")
         logger.info(f"   📊 Loaded {len(self.chroma_databases)} collections")
         logger.info(f"   🔍 Configured {len(self.retrievers)} retrievers")
+        logger.info(f"   🔍 Configured {len(self.rag_chains)} rag chains")
         logger.info(f"   🎯 Default collection: {self.default_collection}")
 
     def _initialize_llm(self, llm_name: str, temperature: float):
@@ -160,7 +204,9 @@ class OllamaRag:
         successful_collections = []
 
         # if using the docker container, client must be considered if you are running container in port 8000
-        chroma_client = chromadb.HttpClient(host="localhost", port=8000)
+        chroma_host = os.getenv("CHROMA_HOST", "localhost")
+        chroma_port = os.getenv("CHROMA_PORT", 8000)
+        chroma_client = chromadb.HttpClient(host=chroma_host, port=chroma_port)
 
         for collection_name in self.collections_to_init:
             try:
@@ -178,9 +224,20 @@ class OllamaRag:
                 # Create retriever for this collection
                 chroma_retriever = chroma_db.as_retriever(
                     search_type="mmr", 
-                    search_kwargs={"k": 6, "fetch_k": 12}
+                    search_kwargs={"k": 6, 
+                    "fetch_k": 12,
+                    # "lambda_mult": 0.5
+                    }
                 )
+
+                # chroma_retriever = chroma_db.as_retriever(
+                #     search_type="similarity",
+                #     search_kwargs={"k": 5}
+                # )
                 
+
+                rag_chain = create_retrieval_chain(chroma_retriever, self.question_answer_chain)
+
                 # Create RetrievalQA chain for this collection
                 retrieval_qa = RetrievalQA.from_chain_type(
                     llm=self.llm,
@@ -194,6 +251,7 @@ class OllamaRag:
                 # Store in dictionaries
                 self.chroma_databases[collection_name] = chroma_db
                 self.retrievers[collection_name] = retrieval_qa
+                self.rag_chains[collection_name] = rag_chain
                 successful_collections.append(collection_name)
                 
                 logger.info(f"✅ Successfully initialized collection: {collection_name}")
@@ -296,6 +354,22 @@ class OllamaRag:
         # Multiple conditions: wrap in $and operator
         return {"$and": conditions}
 
+    def log_result(self, result: Dict):
+        logger.info("✅✅✅✅✅✅ Query completed successfully")
+                
+        logger.info(f"Source Documents ({len(result['context'])}):")
+        logger.info("--------------------------------")
+        for i, doc in enumerate(result["context"], 1):
+            logger.info(f"Document {i}:")
+            logger.info(f"Content: \n{doc.page_content[:200]}...")
+            if doc.metadata:
+                logger.info(f"Metadata: {doc.metadata}")
+                logger.info("--------------------------------")
+        
+        logger.info("LLM Answer:")
+        logger.info(result["answer"])
+
+
     def run_query(self, 
                   query_request: str, 
                   plant_type: Optional[str] = None,
@@ -316,6 +390,7 @@ class OllamaRag:
             Answer from the RAG system
         """
         try:
+            answer = None
             # Determine which collection to use
             if plant_type and plant_type in self.chroma_databases:
                 collection_name = plant_type
@@ -328,63 +403,82 @@ class OllamaRag:
                 logger.warning(f"⚠️  Collection {collection_name} not available, falling back to {self.default_collection}")
                 collection_name = self.default_collection
             
+            logger.debug(f"🔍 Querying collection: {collection_name}")
+
             chroma_db = self.chroma_databases[collection_name]
             retrieval_qa = self.retrievers[collection_name]
+            rag_chain = self.rag_chains[collection_name]
+            
+            logger.info("🔍 Using RAG chain invocation with mmr search")
+            augmented_query_request = f"{query_request} \n StateName: {location} \n Disease: {disease} \n Season: {season}"
+            logger.debug(f"🔍 Augmented query request: {augmented_query_request}")
+            result = rag_chain.invoke({"input": augmented_query_request})
 
-            logger.debug(f"🔍 Querying collection: {collection_name}")
+            if result["context"]:
+                self.log_result(result)
+            else:
+                logger.warning("⚠️  No documents found with metadata filters, trying without filters...")
+                
+            answer = result["answer"]
             
-            # Build metadata filter
-            metadata_filter = self._build_metadata_filter(season, location, disease)
-            if metadata_filter:
-                logger.info(f"🎯 Using metadata filters: {metadata_filter}")
             
-            # Execute query using RetrievalQA chain with metadata filtering support
-            if metadata_filter:
-                logger.info("🎯 Using metadata-filtered RetrievalQA")
+            # # Build metadata filter
+            # metadata_filter = self._build_metadata_filter(season, location, disease)
+            # if metadata_filter:
+            #     logger.info(f"🎯 Using metadata filters: {metadata_filter}")
+            
+            # # Execute query using RetrievalQA chain with metadata filtering support
+            # if metadata_filter:
+            #     logger.info("🎯 Using metadata-filtered RetrievalQA")
                 
-                # Create a temporary retriever with metadata filter for this query
-                filtered_retriever = chroma_db.as_retriever(
-                    search_type="mmr",
-                    search_kwargs={
-                        "k": 6, 
-                        "fetch_k": 12,
-                        "filter": metadata_filter
-                    }
-                )
+            #     # Create a temporary retriever with metadata filter for this query
+            #     filtered_retriever = chroma_db.as_retriever(
+            #         search_type="mmr",
+            #         search_kwargs={
+            #             "k": 6, 
+            #             "fetch_k": 12,
+            #             "filter": metadata_filter
+            #         }
+            #     )
                 
-                # Create a temporary RetrievalQA with the filtered retriever
-                filtered_retrieval_qa = RetrievalQA.from_chain_type(
-                    llm=self.llm,
-                    chain_type="stuff", 
-                    retriever=filtered_retriever,
-                    input_key="query",
-                    return_source_documents=True,
-                    chain_type_kwargs=self.chain_type_kwargs,
-                )
+            #     # Create a temporary RetrievalQA with the filtered retriever
+            #     filtered_retrieval_qa = RetrievalQA.from_chain_type(
+            #         llm=self.llm,
+            #         chain_type="stuff", 
+            #         retriever=filtered_retriever,
+            #         input_key="query",
+            #         return_source_documents=True,
+            #         chain_type_kwargs=self.chain_type_kwargs,
+            #     )
                 
-                # Execute the query with metadata filtering
-                result = filtered_retrieval_qa.invoke({"query": query_request})
-                answer = result["result"]
                 
-                # Check if we got meaningful results
-                if not result.get("source_documents"):
-                    logger.warning("⚠️  No documents found with metadata filters, trying without filters...")
-                    # Fallback to standard RetrievalQA chain
-                    result = retrieval_qa.invoke({"query": query_request})
-                    answer = result["result"]
-                else:
-                    logger.info(f"✅ Found {len(result['source_documents'])} documents with metadata filter")
+            #     # Execute the query with metadata filtering
+            #     # result = filtered_retrieval_qa.invoke({"query": query_request})
+            #     # answer = result["result"]                
+            #     # logger.info(f"✅✅✅✅✅✅ Query completed successfully using collection: {collection_name} with {len(result['source_documents'])} filtered documents")
+            #     # logger.info(f"complete result: {result}")
+
+
+
+            #     # Check if we got meaningful results
+            #     # if not result.get("source_documents"):
+            #     #     logger.warning("⚠️  No documents found with metadata filters, trying without filters...")
+            #     #     # Fallback to standard RetrievalQA chain
+            #     #     result = retrieval_qa.invoke({"query": query_request})
+            #     #     answer = result["result"]
+            #     # else:
+            #     #     logger.info(f"✅ Found {len(result['source_documents'])} documents with metadata filter")
                     
-            else:
-                # Use RetrievalQA chain for standard queries
-                logger.info("🔍 Using RetrievalQA chain for similarity search")
-                result = retrieval_qa.invoke({"query": query_request})
-                answer = result["result"]
+            # else:
+            #     # Use RetrievalQA chain for standard queries
+            #     logger.info("🔍 Using RetrievalQA chain for similarity search")
+            #     result = retrieval_qa.invoke({"query": query_request})
+            #     answer = result["result"]
             
-            if metadata_filter and 'result' in locals() and result.get("source_documents"):
-                logger.info(f"✅ Query completed successfully using collection: {collection_name} with {len(result['source_documents'])} filtered documents")
-            else:
-                logger.info(f"✅ Query completed successfully using collection: {collection_name} via RetrievalQA chain")
+            # if metadata_filter and 'result' in locals() and result.get("source_documents"):
+            #     logger.info(f"✅ Query completed successfully using collection: {collection_name} with {len(result['source_documents'])} filtered documents")
+            # else:
+            #     logger.info(f"✅ Query completed successfully using collection: {collection_name} via RetrievalQA chain")
             
             return answer
             

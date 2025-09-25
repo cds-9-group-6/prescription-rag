@@ -69,6 +69,10 @@ async def startup_event():
         temperature = float(os.getenv("LLM_TEMPERATURE", "0.1"))
         embedding_model = os.getenv("EMBEDDING_MODEL", "nomic-embed-text")
         persist_directory = os.getenv("CHROMA_PERSIST_DIR", "./chroma_capstone_db_new_small")
+        vector_store_host_url = os.getenv("CHROMA_HOST", "localhost")
+        vector_store_port = os.getenv("CHROMA_PORT", 8000)
+
+
         
         # Initialize collections (can be configured via environment variable)
         collections_env = os.getenv("RAG_COLLECTIONS", "")
@@ -87,7 +91,9 @@ async def startup_event():
             temperature=temperature,
             embedding_model=embedding_model,
             collections_to_init=collections_to_init,
-            persist_directory=persist_directory
+            persist_directory=persist_directory,
+            vector_store_host_url=vector_store_host_url,
+            vector_store_port=vector_store_port
         )
         
         logger.info("✅ RAG system initialized successfully")
@@ -143,7 +149,8 @@ async def run_query(request: QueryRequest):
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="RAG system not initialized"
         )
-    
+    # Log the incoming JSON payload
+    logger.info(f"📥 Incoming /query request payload: {request.dict()}")
     start_time = time.time()
     
     try:
