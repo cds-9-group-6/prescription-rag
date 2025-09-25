@@ -29,6 +29,8 @@ This repository contains files on running RAG (Retrieval-Augmented Generation).
 
   - api/ → FastAPI-based REST API for Agricultural Advisory RAG
 
+  - data/ → Reference folder which contains data folder of crops that has been embedded for chroma db
+
 ---
 
 ### 1. `Rag_huggingface.ipynb`  
