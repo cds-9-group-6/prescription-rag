@@ -315,6 +315,15 @@ curl -X POST "http://localhost:8081/query/sources" \
     "location": "Punjab"
   }'
 
+# Structured treatment query
+curl -X POST "http://localhost:8081/query/treatment" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "My tomato plants have blight, need detailed treatment",
+    "plant_type": "Tomato",
+    "season": "Summer"
+  }'
+
 # Get available collections
 curl -X GET "http://localhost:8081/collections"
 ```
