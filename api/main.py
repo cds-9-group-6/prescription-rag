@@ -329,7 +329,20 @@ async def get_structured_treatment(request: QueryRequest):
         
         # Validate and create structured response
         try:
-            treatment_response = StructuredTreatmentResponse(**result["treatment_data"])
+            # Handle special cases in the data before validation
+            treatment_data = result["treatment_data"].copy()
+            
+            # Handle "Not applicable" secondary treatment
+            if (treatment_data.get("medicine_recommendations", {}).get("secondary_treatment", {}).get("medicine_name") == "Not applicable"):
+                treatment_data["medicine_recommendations"]["secondary_treatment"] = None
+            
+            # Ensure organic_alternatives is a list
+            if "medicine_recommendations" in treatment_data:
+                med_rec = treatment_data["medicine_recommendations"]
+                if "organic_alternatives" not in med_rec:
+                    med_rec["organic_alternatives"] = []
+            
+            treatment_response = StructuredTreatmentResponse(**treatment_data)
             
             return StructuredTreatmentQueryResponse(
                 treatment=treatment_response,
@@ -342,12 +355,15 @@ async def get_structured_treatment(request: QueryRequest):
             
         except Exception as validation_error:
             logger.error(f"Treatment response validation failed: {validation_error}")
+            logger.error(f"Treatment data: {result['treatment_data']}")
+            
+            # Return with detailed error information for debugging
             return StructuredTreatmentQueryResponse(
                 treatment=None,
                 collection_used=result["collection_used"],
                 query_time=result["query_time"],
                 success=False,
-                raw_response=result["raw_response"],
+                raw_response=f"Validation Error: {str(validation_error)}\n\nOriginal Response: {result['raw_response']}",
                 parsing_success=False
             )
         

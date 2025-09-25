@@ -28,19 +28,19 @@ class WeeklyTreatmentStep(BaseModel):
 
 class WeeklyTreatmentPlan(BaseModel):
     """Weekly treatment plan."""
-    week_1: WeeklyTreatmentStep = Field(..., description="Week 1 treatment plan")
-    week_2: WeeklyTreatmentStep = Field(..., description="Week 2 treatment plan")
-    week_3: WeeklyTreatmentStep = Field(..., description="Week 3 treatment plan")
-    week_4: WeeklyTreatmentStep = Field(..., description="Week 4 treatment plan")
+    week_1: Optional[WeeklyTreatmentStep] = Field(None, description="Week 1 treatment plan")
+    week_2: Optional[WeeklyTreatmentStep] = Field(None, description="Week 2 treatment plan")
+    week_3: Optional[WeeklyTreatmentStep] = Field(None, description="Week 3 treatment plan")
+    week_4: Optional[WeeklyTreatmentStep] = Field(None, description="Week 4 treatment plan")
 
 
 class MedicineDetails(BaseModel):
     """Details for a specific medicine."""
     medicine_name: str = Field(..., description="Name of the medicine/chemical")
-    active_ingredient: str = Field(..., description="Active ingredient name")
-    dosage: str = Field(..., description="Concentration and quantity per application")
-    application_method: str = Field(..., description="How to apply the medicine")
-    frequency: str = Field(..., description="How often to apply")
+    active_ingredient: Optional[str] = Field(None, description="Active ingredient name")
+    dosage: Optional[str] = Field(None, description="Concentration and quantity per application")
+    application_method: Optional[str] = Field(None, description="How to apply the medicine")
+    frequency: Optional[str] = Field(None, description="How often to apply")
     duration: Optional[str] = Field(None, description="Total treatment period")
     precautions: Optional[List[str]] = Field(None, description="Safety precautions")
     when_to_use: Optional[str] = Field(None, description="Conditions when to use this medicine")
@@ -55,9 +55,13 @@ class OrganicAlternative(BaseModel):
 
 class MedicineRecommendations(BaseModel):
     """Medicine recommendations with primary and secondary treatments."""
-    primary_treatment: MedicineDetails = Field(..., description="Primary medicine recommendation")
+    primary_treatment: Optional[MedicineDetails] = Field(None, description="Primary medicine recommendation")
     secondary_treatment: Optional[MedicineDetails] = Field(None, description="Secondary/supportive medicine")
     organic_alternatives: List[OrganicAlternative] = Field(default=[], description="Organic treatment options")
+    
+    class Config:
+        # Allow extra fields and ignore validation errors for "Not applicable" cases
+        extra = "ignore"
 
 
 class Prevention(BaseModel):
@@ -78,17 +82,21 @@ class AdditionalNotes(BaseModel):
 
 class StructuredTreatmentResponse(BaseModel):
     """Complete structured treatment response."""
-    diagnosis: Diagnosis = Field(..., description="Disease diagnosis information")
-    immediate_treatment: ImmediateTreatment = Field(..., description="Immediate treatment actions")
-    weekly_treatment_plan: WeeklyTreatmentPlan = Field(..., description="4-week treatment plan")
-    medicine_recommendations: MedicineRecommendations = Field(..., description="Medicine recommendations")
-    prevention: Prevention = Field(..., description="Prevention strategies")
-    additional_notes: AdditionalNotes = Field(..., description="Additional notes and considerations")
+    diagnosis: Optional[Diagnosis] = Field(None, description="Disease diagnosis information")
+    immediate_treatment: Optional[ImmediateTreatment] = Field(None, description="Immediate treatment actions")
+    weekly_treatment_plan: Optional[WeeklyTreatmentPlan] = Field(None, description="4-week treatment plan")
+    medicine_recommendations: Optional[MedicineRecommendations] = Field(None, description="Medicine recommendations")
+    prevention: Optional[Prevention] = Field(None, description="Prevention strategies")
+    additional_notes: Optional[AdditionalNotes] = Field(None, description="Additional notes and considerations")
+    
+    class Config:
+        # Allow extra fields for flexibility
+        extra = "allow"
 
 
 class StructuredTreatmentQueryResponse(BaseModel):
     """API response model for structured treatment queries."""
-    treatment: StructuredTreatmentResponse = Field(..., description="Structured treatment response")
+    treatment: Optional[StructuredTreatmentResponse] = Field(None, description="Structured treatment response (None if parsing failed)")
     collection_used: str = Field(..., description="ChromaDB collection used")
     query_time: Optional[float] = Field(None, description="Query execution time in seconds")
     success: bool = Field(..., description="Whether the query was successful")
