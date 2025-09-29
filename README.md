@@ -56,6 +56,10 @@ The vector database in two ways:
   ```bash
   docker pull amit1994/chromadb_small_huggingface
   ```
+  ```bash
+  docker run -p 8000:8000 amit1994/chromadb_small_huggingface
+  ```
+
 ### 2. From Google Drive
 
   [Google Drive Folder](https://drive.google.com/drive/u/0/folders/1vM6zUKWw-AhbEef4_KbRSJwc80vloXcf). 
