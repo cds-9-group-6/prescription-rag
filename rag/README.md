@@ -35,7 +35,7 @@ This folder contains code for RAG implemetation.
     **`Embedding_creations_with_384_dimensions.ipynb`**  
     (found under `sasya-arogya-data-engineering/RAG-data-engineering`). 
     
-### Retiver 
+### Retriever
 
     - The Retriver logic uses the following metadata
 
