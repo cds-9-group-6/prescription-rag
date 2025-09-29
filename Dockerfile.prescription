@@ -53,8 +53,8 @@ ENV OLLAMA_HOST=http://localhost:11434 \
     OLLAMA_MODEL=llama3.2:3b \
     EMBEDDING_MODEL=intfloat/multilingual-e5-large-instruct \
     LOG_LEVEL=INFO \
-    CHROMADB_HOST=localhost \
-    CHROMADB_PORT=8000 \
+    CHROMA_HOST=localhost \
+    CHROMA_PORT=8000 \
     MLFLOW_TRACKING_URI=http://localhost:5001 \
     MLFLOW_EXPERIMENT_NAME= \
     MLFLOW_REGISTRY_URI=http://localhost:5001
@@ -74,8 +74,8 @@ ENV OLLAMA_HOST=http://localhost:11434 \
 # ENV API_VERSION=1.0.0
 # ENV API_DESCRIPTION="RAG system for agricultural prescriptions"
 
-# ENV CHROMADB_HOST=localhost
-# ENV CHROMADB_PORT=8000
+# ENV CHROMA_HOST=localhost
+# ENV CHROMA_PORT=8000
 # ENV CHROMA_PERSIST_DIR=./chroma_capstone_db_new_reduced_hugging_face
 # ENV RAG_COLLECTIONS=Tomato,Potato,Rice,Wheat,Corn
 
