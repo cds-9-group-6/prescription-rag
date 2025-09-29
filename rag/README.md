@@ -24,7 +24,7 @@ This folder contains code for RAG implemetation.
 
 ### Database
 
-- The system uses a **ChromaDB vector store** at: ./chroma_capstone_db_new_reduced_hugging_face
+- The system uses a **ChromaDB vector store** at: ./**`chroma_capstone_db_new_reduced_hugging_face`**
 
 - Embeddings were generated using:  
 **`multi-qa-MiniLM-L6-cos-v1`** 
@@ -43,9 +43,9 @@ This folder contains code for RAG implemetation.
 - `StateName`  
 - `disease_name` 
 
-2. **llm**: Model of choice for answering the **user question**
+2. **`llm`**: Model of choice for answering the **user question**
 
-3. **Query** – The actual **user question**.
+3. **`query`** – The actual **user question**.
 
 - The retriever performs a similarity search against the database.  
 - Retrieved documents + a custom prompt are passed to the LLM to generate the final answer.  
