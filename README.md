@@ -127,6 +127,10 @@ ollama is running as a native app on macbook
 
 ```bash
 podman run -d --name chromadb  -p 8000:8000 quay.io/rajivranjan/chromadb-with-data-arm64:v1
+
+# or start if already executed podman run before and there is a container already
+
+podman start chromadb
 ```
 
 3. Prescription
