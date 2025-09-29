@@ -37,15 +37,19 @@ This folder contains code for RAG implemetation.
 
 ### Retriever
 
-- The Retriver logic uses the following metadata
+- The Retriver logic uses the following data
 
 1. **`filter`**: These are the metadata filters for refined retrieval:
 - `StateName`  
 - `disease_name` 
 
-2. **`llm`**: Model of choice for answering the **user question**
+3. **`ChromaDB`** – The vector database used by the retriever to fetch the most relevant documents for a given user query.
 
-3. **`query`** – The actual **user question**.
+3. **`llm`**: Model of choice for answering the **user question**
+
+4. **`PROMPT`** – Provides context to the LLM by combining the **retrieved documents** and the **user query**, guiding the model to generate a relevant and accurate answer.
+
+5. **`query`** – The actual **user question**.
 
 - The retriever performs a similarity search against the database.  
 - Retrieved documents + a custom prompt are passed to the LLM to generate the final answer.  
