@@ -371,7 +371,7 @@ ollama_object = OllamaRag("llama3.1:8b",max_tokens=600,top_p=0.9)
 
 question = "give me the cure for Tomato plant for Aphids disease"
 
-response = ollama_object.run_query(question,state_name="None",disease_name="Aphids",collection="Tomato")
+response = ollama_object.run_query(question,state_name="ASSAM",disease_name="Aphids",collection="Tomato")
 
 context = [output.page_content for output in response["source_documents"]]
 
