@@ -14,8 +14,11 @@ load_dotenv()
 
 os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
 
+# os.environ["OPENAI_API_KEY"]
+
+mlflow.set_tracking_uri("http://127.0.0.1:5000")
+
 mlflow.set_experiment("LLM Evaluation")
-# mlflow.set_tracking_uri("http://localhost:5000")
 
 
 class RAG_Evaluation:
@@ -51,7 +54,6 @@ class RAG_Evaluation:
             )
         
         # Defining the Aspect Sample
-        
         self.aspect_sample = SingleTurnSample(
                 user_input = self.question,
                 response= self.response,
