@@ -88,3 +88,6 @@ treatment_response_*.json
 # Environment variables
 .env.local
 .env.production
+
+# MLflow tracking directories
+mlruns/
