@@ -10,6 +10,7 @@ from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+# os.environ["OLLAMA_HOST"] = "http://localhost:11434"
 # Import our models
 from .models import (
     QueryRequest,
@@ -64,18 +65,20 @@ rag_system: Optional[OllamaRag] = None
 
 @app.on_event("startup")
 async def startup_event():
-    """Initialize the RAG system on startup."""
-    global rag_system
-    try:
+        """Initialize the RAG system on startup."""
+        global rag_system
+    # try:
         logger.info("🚀 Starting Prescription RAG API...")
         
         # Get configuration from environment variables
         llm_name = os.getenv("OLLAMA_MODEL", "llama3.1:8b")
         temperature = float(os.getenv("LLM_TEMPERATURE", "0.1"))
-        embedding_model = os.getenv("EMBEDDING_MODEL", "nomic-embed-text")
+        # "nomic-embed-text"
+        embedding_model = os.getenv("EMBEDDING_MODEL", "multi-qa-MiniLM-L6-cos-v1")
         persist_directory = os.getenv("CHROMA_PERSIST_DIR", "./chroma_capstone_db_new_small")
         vector_store_host_url = os.getenv("CHROMA_HOST", "localhost")
         vector_store_port = os.getenv("CHROMA_PORT", 8000)
+
 
 
         
@@ -104,9 +107,9 @@ async def startup_event():
         logger.info("✅ RAG system initialized successfully")
         logger.info(f"Available collections: {rag_system.get_available_collections()}")
         
-    except Exception as e:
-        logger.error(f"❌ Failed to initialize RAG system: {e}")
-        raise RuntimeError(f"Failed to initialize RAG system: {e}")
+    # except Exception as e:
+        # logger.error(f"❌ Failed to initialize RAG system: {e}")
+        # raise RuntimeError(f"Failed to initialize RAG system: {e}")
 
 
 @app.on_event("shutdown")
@@ -213,7 +216,7 @@ async def run_query_with_metrics(request: QueryWithMetricsRequest):
         answer = rag_system.run_query_with_metrics(
             query_request=request.query,
             plant_type=request.plant_type,
-            season=request.season,
+            # season=request.season,
             location=request.location,
             disease=request.disease,
             mlflow_manager=None,  # Could be configured later if needed

@@ -26,7 +26,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-
+# os.environ["OLLAMA_HOST"] = "http://localhost:11434"
 class OllamaRag:
     """
     Enhanced RAG system with pre-initialized ChromaDB collections for multiple plant types.
@@ -169,7 +169,7 @@ class OllamaRag:
         QUESTION:
         {question}
 
-        JSON OUTPUT:
+        OUTPUT:
         """
 
     SYSTEM_PROMPT = """
@@ -202,12 +202,13 @@ class OllamaRag:
     def __init__(self, 
                  llm_name: str, 
                  temperature: float = 0.1, 
-                 embedding_model: str = "nomic-embed-text",  # Ollama embedding model
+                # intfloat/multilingual-e5-large-instruct 
+                 embedding_model: str = "multi-qa-MiniLM-L6-cos-v1",  # Ollama embedding model
                  collections_to_init: Optional[List[str]] = None,
-                 persist_directory: str = "./chroma_capstone_db_new_small",
-                 vector_store_host_url: str = "localhost:8000",
-                 vector_store_port: int = 8000
-                 ):
+                # chroma_capstone_db_new_small  
+                 persist_directory: str = "./chroma_capstone_db_new_reduced_hugging_face",
+                 vector_store_host_url: str = "localhost",
+                 vector_store_port: int = 8000):
         """
         Initialize RAG system with pre-loaded embeddings and retrievers for multiple plant collections.
         
@@ -219,7 +220,9 @@ class OllamaRag:
             persist_directory: ChromaDB persistence directory
         """
         logger.info("🌱 Initializing Enhanced Multi-Plant RAG System...")
-        
+
+        self.vector_store_host_url = vector_store_host_url
+        self.vector_store_port = vector_store_port
         # Initialize LLM
         self._initialize_llm(llm_name, temperature)
         
@@ -253,6 +256,8 @@ class OllamaRag:
         self.chroma_databases: Dict[str, Chroma] = {}
         self.retrievers: Dict[str, RetrievalQA] = {}
         self.rag_chains: Dict[str, any] = {}
+
+        # INITIALIZE ALL COLLECTIONS
         self._initialize_all_collections()
         
         # Set default collection (fallback)
@@ -290,8 +295,17 @@ class OllamaRag:
 
         # if using the docker container, client must be considered if you are running container in port 8000
         chroma_host = os.getenv("CHROMA_HOST", "localhost")
-        chroma_port = os.getenv("CHROMA_PORT", 8000)
+        chroma_port = int(os.getenv("CHROMA_PORT", 8000))
+
+        print("host:",self.vector_store_host_url)
+        print("port:",self.vector_store_port)
+
         chroma_client = chromadb.HttpClient(host=chroma_host, port=chroma_port)
+
+        # chroma_client = chromadb.HttpClient(host=self.vector_store_host_url, port=self.vector_store_port)
+
+        logger.info(f"the chroma client is {chroma_client}")
+
 
         for collection_name in self.collections_to_init:
             try:
@@ -390,18 +404,18 @@ class OllamaRag:
         """
         conditions = []
         
-        if season:
-            # Handle common season variations
-            season_lower = season.lower()
-            if season_lower in ['summer', 'kharif', 'monsoon']:
-                season_variations = ['Summer', 'Kharif', 'KHARIF', 'summer', 'Monsoon']
-            elif season_lower in ['winter', 'rabi', 'cold']:
-                season_variations = ['Winter', 'Rabi', 'RABI', 'winter', 'Cold']
-            else:
-                season_variations = [season, season.capitalize(), season.upper()]
+        # if season:
+        #     # Handle common season variations
+        #     season_lower = season.lower()
+        #     if season_lower in ['summer', 'kharif', 'monsoon']:
+        #         season_variations = ['Summer', 'Kharif', 'KHARIF', 'summer', 'Monsoon']
+        #     elif season_lower in ['winter', 'rabi', 'cold']:
+        #         season_variations = ['Winter', 'Rabi', 'RABI', 'winter', 'Cold']
+        #     else:
+        #         season_variations = [season, season.capitalize(), season.upper()]
             
-            conditions.append({"Season_English": {"$in": season_variations}})
-            logger.debug(f"🌱 Season filter: {season_variations}")
+        #     conditions.append({"Season_English": {"$in": season_variations}})
+        #     logger.debug(f"🌱 Season filter: {season_variations}")
         
         if location:
             # Create flexible location matching (try StateName first, most common)
@@ -625,6 +639,9 @@ class OllamaRag:
             
             chroma_db = self.chroma_databases[collection_name]
             retrieval_qa = self.retrievers[collection_name]
+
+            # print("chroma db",chroma_db)
+            # print("retrieval_qa",retrieval_qa)
             
             # Build metadata filter
             metadata_filter = self._build_metadata_filter(season, location, disease)
@@ -635,6 +652,7 @@ class OllamaRag:
             docs_filtered = []
             docs_filtered_count = 0
             
+            # Check if the metadata filters are there
             if has_metadata_filter:
                 try:
                     docs_filtered = chroma_db.similarity_search(
@@ -674,7 +692,20 @@ class OllamaRag:
                 result = filtered_retrieval_qa.invoke({"query": query_request})
                 answer = result["result"]
                 actual_docs_used = len(result.get("source_documents", []))
-                
+
+
+                print("answer from meta data",answer)
+                print("actual_docs_used from meta data filters",actual_docs_used)
+
+                            #     # if not result.get("source_documents"):
+            #     #     logger.warning("⚠️  No documents found with metadata filters, trying without filters...")
+            #     #     # Fallback to standard RetrievalQA chain
+            #     #     result = retrieval_qa.invoke({"query": query_request})
+            #     #     answer = result["result"]
+            #     # else:
+            #     #     logger.info(f"✅ Found {len(result['source_documents'])} documents with metadata filter")
+                    
+            # if no documents are founded   
             else:
                 # Use standard RetrievalQA chain
                 logger.info("🔍 Using RetrievalQA chain for similarity search")
@@ -1136,6 +1167,21 @@ class OllamaRag:
                     "error": str(e)
                 }
         return info
+    
+
+# query_request: str, 
+#                               plant_type: Optional[str] = None,
+#                               season: Optional[str] = None,
+#                               location: Optional[str] = None, 
+#                               disease: Optional[str] = None,
+#                               mlflow_manager=None,
+#                               session_id: Optional[str] = "unknown") -> str:
+
+# ollama_object = OllamaRag(llm_name="llama-3.1-8b")
+
+# ollama_object.run_query_with_metrics(query_request="Give me the cure for Aphids disease Tomato plants",plant_type="Tomato",location="ASSAM",disease="Aphids")
+
+
 
 # Example usage:
 # if __name__ == "__main__":

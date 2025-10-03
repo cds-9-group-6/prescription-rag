@@ -34,7 +34,7 @@ if __name__ == "__main__":
     print("📊 RAG Configuration:")
     print(f"   OLLAMA_HOST: {os.getenv('OLLAMA_HOST', 'http://localhost:11434')}")
     print(f"   OLLAMA_MODEL: {os.getenv('OLLAMA_MODEL', 'llama3.1:8b')}")
-    print(f"   EMBEDDING_MODEL: {os.getenv('EMBEDDING_MODEL', 'nomic-embed-text')}")
+    print(f"   EMBEDDING_MODEL: {os.getenv('EMBEDDING_MODEL', 'multi-qa-MiniLM-L6-cos-v1')}")
     print(f"   LLM_TEMPERATURE: {os.getenv('LLM_TEMPERATURE', '0.1')}")
     print(f"   RAG_COLLECTIONS: {os.getenv('RAG_COLLECTIONS', 'default collections')}")
     print(f"   CHROMA_PERSIST_DIR: {os.getenv('CHROMA_PERSIST_DIR', './chroma_capstone_db_new_small')}")
