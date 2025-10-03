@@ -295,7 +295,7 @@ class OllamaRag:
 
         # if using the docker container, client must be considered if you are running container in port 8000
         chroma_host = os.getenv("CHROMA_HOST", "localhost")
-        chroma_port = int(os.getenv("CHROMA_PORT", 8000))
+        chroma_port = os.getenv("CHROMA_PORT", 8000)
 
         print("host:",self.vector_store_host_url)
         print("port:",self.vector_store_port)
