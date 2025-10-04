@@ -90,4 +90,7 @@ treatment_response_*.json
 .env.production
 
 # MLflow tracking directories
-mlruns/
+mlruns
+mlflow-data
+prometheus-data
+grafana-data
