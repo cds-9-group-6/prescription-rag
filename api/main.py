@@ -10,6 +10,8 @@ from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+# os.environ["OLLAMA_HOST"] = "http://localhost:11434"
+
 # Import our models
 from .models import (
     QueryRequest,
