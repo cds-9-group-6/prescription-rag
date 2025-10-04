@@ -240,6 +240,7 @@ class OllamaRag:
         # Initialize embeddings (shared across all collections)
         logger.info(f"📚 Initializing Ollama embeddings with model: {embedding_model}")
         # ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+        # self.embedding_model = "multi-qa-MiniLM-L6-cos-v1"
         self.embedding = HuggingFaceEmbeddings(
             model_name=embedding_model
         )
@@ -609,8 +610,9 @@ class OllamaRag:
         """
         import time
         start_time = time.time()
-        
+
         try:
+            answer = None
             # Determine which collection to use
             if plant_type and plant_type in self.chroma_databases:
                 collection_name = plant_type
@@ -618,74 +620,41 @@ class OllamaRag:
             else:
                 collection_name = self._detect_plant_type(query_request)
             
-            # Get the appropriate ChromaDB instance
+            # Get the appropriate ChromaDB instance (not retriever)
             if collection_name not in self.chroma_databases:
                 logger.warning(f"⚠️  Collection {collection_name} not available, falling back to {self.default_collection}")
                 collection_name = self.default_collection
             
+            logger.debug(f"🔍 Querying collection: {collection_name}")
+
             chroma_db = self.chroma_databases[collection_name]
             retrieval_qa = self.retrievers[collection_name]
+            rag_chain = self.rag_chains[collection_name]
+
+            augmented_query_request = f"{query_request} \n StateName: {location} \n Disease: {disease} \n Season: {season}"
+
+            docs_unfiltered = chroma_db.similarity_search(augmented_query_request, k=6)
+            # docs_filtered = []
+            # docs_filtered_count = 0
             
-            # Build metadata filter
-            metadata_filter = self._build_metadata_filter(season, location, disease)
-            has_metadata_filter = metadata_filter is not None
-            
-            # Get documents with and without filtering for comparison
-            docs_unfiltered = chroma_db.similarity_search(query_request, k=6)
-            docs_filtered = []
-            docs_filtered_count = 0
-            
-            if has_metadata_filter:
-                try:
-                    docs_filtered = chroma_db.similarity_search(
-                        query_request, 
-                        k=6, 
-                        filter=metadata_filter
-                    )
-                    docs_filtered_count = len(docs_filtered)
-                except Exception as filter_error:
-                    logger.warning(f"Metadata filtering failed: {filter_error}")
-                    docs_filtered_count = 0
-            
-            # Execute the actual query
-            if has_metadata_filter and docs_filtered_count > 0:
-                logger.info("🎯 Using metadata-filtered RetrievalQA")
-                
-                # Create filtered retriever
-                filtered_retriever = chroma_db.as_retriever(
-                    search_type="mmr",
-                    search_kwargs={
-                        "k": 6, 
-                        "fetch_k": 12,
-                        "filter": metadata_filter
-                    }
-                )
-                
-                # Create temporary filtered RetrievalQA
-                filtered_retrieval_qa = RetrievalQA.from_chain_type(
-                    llm=self.llm,
-                    chain_type="stuff",
-                    retriever=filtered_retriever,
-                    input_key="query",
-                    return_source_documents=True,
-                    chain_type_kwargs=self.chain_type_kwargs,
-                )
-                
-                result = filtered_retrieval_qa.invoke({"query": query_request})
-                answer = result["result"]
-                actual_docs_used = len(result.get("source_documents", []))
-                
+            logger.info("🔍 Using RAG chain invocation with mmr search")
+
+            logger.debug(f"🔍 Augmented query request: {augmented_query_request}")
+            result = rag_chain.invoke({"input": augmented_query_request})
+
+            if result["context"]:
+                self.log_result(result)
             else:
-                # Use standard RetrievalQA chain
-                logger.info("🔍 Using RetrievalQA chain for similarity search")
-                result = retrieval_qa.invoke({"query": query_request})
-                answer = result["result"]
-                actual_docs_used = len(result.get("source_documents", []))
-            
-            # Calculate query processing time
+                logger.warning("⚠️  No documents found with metadata filters, trying without filters...")
+                
+            answer = result["answer"]
+
+            # Getting the actual docs used
+            actual_docs_used = len(result.get("source_documents", []))
+
             end_time = time.time()
             query_time = end_time - start_time
-            
+
             # Log comprehensive RAG metrics to MLflow
             if mlflow_manager and mlflow_manager.is_available():
                 try:
@@ -694,10 +663,10 @@ class OllamaRag:
                     # Basic RAG metrics
                     mlflow.log_metric("rag_query_time_seconds", query_time)
                     mlflow.log_metric("rag_docs_unfiltered_count", len(docs_unfiltered))
-                    mlflow.log_metric("rag_docs_filtered_count", docs_filtered_count)
+                    # mlflow.log_metric("rag_docs_filtered_count", docs_filtered_count)
                     mlflow.log_metric("rag_docs_actually_used", actual_docs_used)
-                    mlflow.log_metric("rag_metadata_filter_used", 1 if has_metadata_filter else 0)
-                    mlflow.log_metric("rag_filter_effectiveness", docs_filtered_count / len(docs_unfiltered) if len(docs_unfiltered) > 0 else 0)
+                    # mlflow.log_metric("rag_metadata_filter_used", 1 if has_metadata_filter else 0)
+                    # mlflow.log_metric("rag_filter_effectiveness", docs_filtered_count / len(docs_unfiltered) if len(docs_unfiltered) > 0 else 0)
                     
                     # RAG configuration metrics
                     mlflow.log_param("rag_collection_used", collection_name)
@@ -717,13 +686,15 @@ class OllamaRag:
                     mlflow.log_metric("rag_docs_to_response_ratio", response_length / actual_docs_used if actual_docs_used > 0 else 0)
                     
                     # Filter metadata details
-                    if has_metadata_filter:
-                        if season:
-                            mlflow.log_param("rag_season_filter", season)
-                        if location:
-                            mlflow.log_param("rag_location_filter", location)
-                        if disease:
-                            mlflow.log_param("rag_disease_filter", disease)
+                    # if has_metadata_filter:
+
+                    # logging the meta parametrs for the query
+                    if season:
+                        mlflow.log_param("rag_season_filter", season)
+                    if location:
+                        mlflow.log_param("rag_location_filter", location)
+                    if disease:
+                        mlflow.log_param("rag_disease_filter", disease)
                     
                     # Success metrics
                     mlflow.log_metric("rag_query_success", 1)
@@ -735,15 +706,15 @@ class OllamaRag:
                     logger.warning(f"Failed to log RAG metrics to MLflow: {e}")
             
             logger.info(f"✅ Query completed successfully using collection: {collection_name} with {actual_docs_used} documents in {query_time:.2f}s")
+
             return answer
-            
+
         except Exception as e:
-            # Calculate query time even for errors
+
             end_time = time.time()
             query_time = end_time - start_time
-            
-            logger.error(f"❌ Error during RAG query execution: {e}")
-            
+
+            logger.error(f"❌ Error during query execution: {e}")
             # Log error metrics
             if mlflow_manager and mlflow_manager.is_available():
                 try:
@@ -754,28 +725,27 @@ class OllamaRag:
                     mlflow_manager.log_error(session_id, "rag_query_error", str(e))
                 except:
                     pass
-            
-            # Try fallback to default collection
-            logger.info(f"🔄 Attempting fallback to default collection...")
+
+            # Try fallback to default collection using RetrievalQA
+            logger.info(f"🔄 Attempting fallback to default collection using RetrievalQA...")
             try:
                 fallback_retrieval_qa = self.retrievers[self.default_collection]
                 result = fallback_retrieval_qa.invoke({"query": query_request})
                 answer = result["result"]
-                logger.info("✅ Fallback query completed successfully")
-                
-                # Log fallback success
+                logger.info("✅ Fallback RetrievalQA query completed successfully")
+
                 if mlflow_manager and mlflow_manager.is_available():
                     try:
                         import mlflow
                         mlflow.log_metric("rag_fallback_success", 1)
                     except:
                         pass
-                
+
                 return answer
                     
             except Exception as fallback_error:
                 logger.error(f"❌ Fallback query also failed: {fallback_error}")
-                
+
                 # Log fallback failure
                 if mlflow_manager and mlflow_manager.is_available():
                     try:
@@ -784,8 +754,187 @@ class OllamaRag:
                         mlflow_manager.log_error(session_id, "rag_fallback_error", str(fallback_error))
                     except:
                         pass
+            raise RuntimeError(f"RAG query failed: {e}")
+        
+        # END
             
-            raise RuntimeError(f"RAG query with metrics failed: {e}")
+        
+        # try:
+        #     # Determine which collection to use
+        #     if plant_type and plant_type in self.chroma_databases:
+        #         collection_name = plant_type
+        #         logger.debug(f"🎯 Using explicit plant type: {plant_type}")
+        #     else:
+        #         collection_name = self._detect_plant_type(query_request)
+            
+        #     # Get the appropriate ChromaDB instance
+        #     if collection_name not in self.chroma_databases:
+        #         logger.warning(f"⚠️  Collection {collection_name} not available, falling back to {self.default_collection}")
+        #         collection_name = self.default_collection
+            
+        #     chroma_db = self.chroma_databases[collection_name]
+        #     retrieval_qa = self.retrievers[collection_name]
+            
+        #     # Build metadata filter
+        #     metadata_filter = self._build_metadata_filter(season, location, disease)
+        #     has_metadata_filter = metadata_filter is not None
+            
+        #     # Get documents with and without filtering for comparison
+        #     docs_unfiltered = chroma_db.similarity_search(query_request, k=6)
+        #     docs_filtered = []
+        #     docs_filtered_count = 0
+            
+        #     if has_metadata_filter:
+        #         try:
+        #             docs_filtered = chroma_db.similarity_search(
+        #                 query_request, 
+        #                 k=6, 
+        #                 filter=metadata_filter
+        #             )
+        #             docs_filtered_count = len(docs_filtered)
+        #         except Exception as filter_error:
+        #             logger.warning(f"Metadata filtering failed: {filter_error}")
+        #             docs_filtered_count = 0
+            
+        #     # Execute the actual query
+        #     if has_metadata_filter and docs_filtered_count > 0:
+        #         logger.info("🎯 Using metadata-filtered RetrievalQA")
+                
+        #         # Create filtered retriever
+        #         filtered_retriever = chroma_db.as_retriever(
+        #             search_type="mmr",
+        #             search_kwargs={
+        #                 "k": 6, 
+        #                 "fetch_k": 12,
+        #                 "filter": metadata_filter
+        #             }
+        #         )
+                
+        #         # Create temporary filtered RetrievalQA
+        #         filtered_retrieval_qa = RetrievalQA.from_chain_type(
+        #             llm=self.llm,
+        #             chain_type="stuff",
+        #             retriever=filtered_retriever,
+        #             input_key="query",
+        #             return_source_documents=True,
+        #             chain_type_kwargs=self.chain_type_kwargs,
+        #         )
+                
+        #         result = filtered_retrieval_qa.invoke({"query": query_request})
+        #         answer = result["result"]
+        #         actual_docs_used = len(result.get("source_documents", []))
+                
+        #     else:
+        #         # Use standard RetrievalQA chain
+        #         logger.info("🔍 Using RetrievalQA chain for similarity search")
+        #         result = retrieval_qa.invoke({"query": query_request})
+        #         answer = result["result"]
+        #         actual_docs_used = len(result.get("source_documents", []))
+            
+        #     # Calculate query processing time
+        #     end_time = time.time()
+        #     query_time = end_time - start_time
+            
+        #     # Log comprehensive RAG metrics to MLflow
+        #     if mlflow_manager and mlflow_manager.is_available():
+        #         try:
+        #             import mlflow
+                    
+        #             # Basic RAG metrics
+        #             mlflow.log_metric("rag_query_time_seconds", query_time)
+        #             mlflow.log_metric("rag_docs_unfiltered_count", len(docs_unfiltered))
+        #             mlflow.log_metric("rag_docs_filtered_count", docs_filtered_count)
+        #             mlflow.log_metric("rag_docs_actually_used", actual_docs_used)
+        #             mlflow.log_metric("rag_metadata_filter_used", 1 if has_metadata_filter else 0)
+        #             mlflow.log_metric("rag_filter_effectiveness", docs_filtered_count / len(docs_unfiltered) if len(docs_unfiltered) > 0 else 0)
+                    
+        #             # RAG configuration metrics
+        #             mlflow.log_param("rag_collection_used", collection_name)
+        #             mlflow.log_param("rag_plant_type_detected", collection_name)
+        #             mlflow.log_param("rag_has_season_filter", season is not None)
+        #             mlflow.log_param("rag_has_location_filter", location is not None)
+        #             mlflow.log_param("rag_has_disease_filter", disease is not None)
+                    
+        #             # Query characteristics
+        #             mlflow.log_param("rag_query_length", len(query_request))
+        #             mlflow.log_metric("rag_query_word_count", len(query_request.split()))
+                    
+        #             # Prompt effectiveness metrics
+        #             response_length = len(answer)
+        #             mlflow.log_metric("rag_response_length", response_length)
+        #             mlflow.log_metric("rag_response_word_count", len(answer.split()))
+        #             mlflow.log_metric("rag_docs_to_response_ratio", response_length / actual_docs_used if actual_docs_used > 0 else 0)
+                    
+        #             # Filter metadata details
+        #             if has_metadata_filter:
+        #                 if season:
+        #                     mlflow.log_param("rag_season_filter", season)
+        #                 if location:
+        #                     mlflow.log_param("rag_location_filter", location)
+        #                 if disease:
+        #                     mlflow.log_param("rag_disease_filter", disease)
+                    
+        #             # Success metrics
+        #             mlflow.log_metric("rag_query_success", 1)
+        #             mlflow.log_metric("rag_fallback_used", 0)
+                    
+        #             logger.info(f"✅ RAG metrics logged - Collection: {collection_name}, Docs: {actual_docs_used}, Time: {query_time:.2f}s")
+                    
+        #         except Exception as e:
+        #             logger.warning(f"Failed to log RAG metrics to MLflow: {e}")
+            
+        #     logger.info(f"✅ Query completed successfully using collection: {collection_name} with {actual_docs_used} documents in {query_time:.2f}s")
+        #     return answer
+            
+        # except Exception as e:
+        #     # Calculate query time even for errors
+        #     end_time = time.time()
+        #     query_time = end_time - start_time
+            
+        #     logger.error(f"❌ Error during RAG query execution: {e}")
+            
+        #     # Log error metrics
+        #     if mlflow_manager and mlflow_manager.is_available():
+        #         try:
+        #             import mlflow
+        #             mlflow.log_metric("rag_query_success", 0)
+        #             mlflow.log_metric("rag_query_time_seconds", query_time)
+        #             mlflow.log_metric("rag_fallback_used", 1)
+        #             mlflow_manager.log_error(session_id, "rag_query_error", str(e))
+        #         except:
+        #             pass
+            
+        #     # Try fallback to default collection
+        #     logger.info(f"🔄 Attempting fallback to default collection...")
+        #     try:
+        #         fallback_retrieval_qa = self.retrievers[self.default_collection]
+        #         result = fallback_retrieval_qa.invoke({"query": query_request})
+        #         answer = result["result"]
+        #         logger.info("✅ Fallback query completed successfully")
+                
+        #         # Log fallback success
+        #         if mlflow_manager and mlflow_manager.is_available():
+        #             try:
+        #                 import mlflow
+        #                 mlflow.log_metric("rag_fallback_success", 1)
+        #             except:
+        #                 pass
+                
+        #         return answer
+                    
+        #     except Exception as fallback_error:
+        #         logger.error(f"❌ Fallback query also failed: {fallback_error}")
+                
+        #         # Log fallback failure
+        #         if mlflow_manager and mlflow_manager.is_available():
+        #             try:
+        #                 import mlflow
+        #                 mlflow.log_metric("rag_fallback_success", 0)
+        #                 mlflow_manager.log_error(session_id, "rag_fallback_error", str(fallback_error))
+        #             except:
+        #                 pass
+            
+        #     raise RuntimeError(f"RAG query with metrics failed: {e}")
 
     def run_structured_treatment_query(self, 
                                       query_request: str, 
