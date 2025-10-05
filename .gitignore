@@ -94,3 +94,7 @@ mlruns
 mlflow-data
 prometheus-data
 grafana-data
+
+.env
+
+backup

@@ -264,6 +264,15 @@ class OllamaRag:
         )
 
         try:
+            # Setup MLflow
+            logger.info("Setting up MLflow...")
+            self.evaluator.setup_mlflow(
+                tracking_uri=os.getenv("MLFLOW_TRACKING_URI"),
+                experiment_name=os.getenv("MLFLOW_EXPERIMENT_NAME", "llm_tracing_ollama"),
+                active_model_name=os.getenv("MLFLOW_ACTIVE_MODEL_NAME", "llama318b_model"),
+            )
+            
+            # Update current trace with app config
             app_config = {"version": "1.1.0", "model_in_use": "claude-3-sonnet-20240229"}
             current_env = os.getenv("APP_ENVIRONMENT", "development")
             current_app_version = app_config.get("version")
@@ -272,22 +281,16 @@ class OllamaRag:
                 "app_version": current_app_version,}
             mlflow.update_current_trace(tags=context_tags)
             
-            # Setup MLflow
-            logger.info("Setting up MLflow...")
-            self.evaluator.setup_mlflow(
-                tracking_uri=os.getenv("MLFLOW_TRACKING_URI"),
-                experiment_name=os.getenv("MLFLOW_EXPERIMENT_NAME", "llm_tracing_ollama"),
-                active_model_name=os.getenv("MLFLOW_ACTIVE_MODEL_NAME", "llama318b_model"),
-            )
-
-
             
+
+
+
         except Exception as e:
             logger.error(f"Failed to setup MLflow: {e}")
         finally:
         # Ensure proper cleanup of OTel resources
             logger.info("Shutting down evaluator...")
-            self.evaluator.shutdown_async()
+            self.evaluator.shutdown()
 
         
 
@@ -730,6 +733,38 @@ class OllamaRag:
 
             end_time = time.time()
             query_time = end_time - start_time
+
+            try:
+                # Evaluate the answer with the evaluator
+                evaluation_results = self.evaluator.evaluate_responses(
+                    questions=[query_request],
+                    generated_responses=[answer],
+                    use_judge_model=True,
+                    session_id=session_id,
+                    user_id="user_id",
+                )
+
+                
+                # Print results
+                print("\n" + "="*50)
+                print("EVALUATION RESULTS")
+                print("="*50)
+                print(f"Run ID: {evaluation_results['run_id']}")
+                print(f"Metrics: {evaluation_results['metrics']}")
+                
+                # Extract specific metrics
+                metrics = evaluation_results['metrics']
+                if 'answer_similarity/v1/score' in metrics:
+                    print(f"Answer Similarity Score: {metrics['answer_similarity/v1/score']}")
+                
+                print("\nMetrics exported to OpenTelemetry Collector for Prometheus scraping")
+                logger.info("All metrics have been sent to OpenTelemetry Collector")
+            except Exception as e:
+                logger.error(f"Failed to log evaluation results to MLflow: {e}")
+            finally:
+                # Ensure proper cleanup of OTel resources
+                logger.info("Shutting down evaluator...")
+                self.evaluator.shutdown()
 
             # Log comprehensive RAG metrics to MLflow
             if mlflow_manager and mlflow_manager.is_available():
