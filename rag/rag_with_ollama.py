@@ -250,7 +250,7 @@ class OllamaRag:
 
         logger.info("Loading environment variables...")
         load_dotenv()
-
+        load_dotenv(dotenv_path='.env.local', override=True)
         logger.info("Checking environment variables set correctly...")
         self.check_env_vars()
 
