@@ -255,6 +255,7 @@ class LLMEvaluator:
             enable_otel_metrics: Whether to enable OpenTelemetry metrics export
             otel_endpoint: OTLP endpoint for OpenTelemetry Collector
         """
+        # TODO: remove this when we are connecting to OpenAI
         self.openai_model = "llama3.1:8b"
         
         # Synchronous client
@@ -296,7 +297,7 @@ class LLMEvaluator:
         
         logger.info(f"Initialized LLMEvaluator with model: {openai_model}")
 
-    @mlflow.trace
+    # @mlflow.trace
     def setup_mlflow(
         self, tracking_uri: str, experiment_name: str, active_model_name: str = None
     ):
@@ -344,7 +345,7 @@ class LLMEvaluator:
         """Convert multi-line string to single line"""
         return " ".join(s.split())
 
-    @mlflow.trace
+    # @mlflow.trace
     def generate_expected_response_with_judge_model(self, question: str) -> str:
         """
         Generate expected/reference response using GPT-4 for evaluation purposes.
@@ -386,7 +387,7 @@ class LLMEvaluator:
             )
             return ""
 
-    @mlflow.trace
+    # @mlflow.trace
     def generate_expected_responses(self, questions: List[str]) -> List[str]:
         """
         Generate expected responses for a list of questions
@@ -416,7 +417,7 @@ class LLMEvaluator:
 
         return expected_responses_judge
 
-    @mlflow.trace
+    # @mlflow.trace
     async def generate_expected_response_with_judge_model_async(self, question: str) -> str:
         """
         Async version: Generate expected/reference response using GPT-4 for evaluation purposes.
@@ -458,7 +459,7 @@ class LLMEvaluator:
             )
             return ""
 
-    @mlflow.trace
+    # @mlflow.trace
     async def generate_expected_responses_async(self, questions: List[str]) -> List[str]:
         """
         Async version: Generate expected responses for a list of questions concurrently.
@@ -499,7 +500,7 @@ class LLMEvaluator:
 
         return expected_responses_judge
 
-    @mlflow.trace
+    # @mlflow.trace
     def evaluate_responses(
         self,
         questions: List[str],
@@ -623,7 +624,7 @@ class LLMEvaluator:
 
         return {"metrics": results.metrics, "run_id": run_id, "results": results}
 
-    @mlflow.trace
+    # @mlflow.trace
     async def evaluate_responses_async(
         self,
         questions: List[str],

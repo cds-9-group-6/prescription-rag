@@ -4,6 +4,11 @@ import logging
 import os
 from typing import Dict, List, Optional
 
+from dotenv import load_dotenv
+import mlflow
+from observability.inference_tracking import LLMEvaluator
+
+
 import chromadb
 # from langchain.chains.retrieval_qa.base import RetrievalQA
 from langchain.chains import RetrievalQA
@@ -197,6 +202,30 @@ class OllamaRag:
 
         """
 
+    # @mlflow.trace()
+    def check_env_vars():
+        """Check if all required environment variables are set"""
+        required_env_vars = [
+            "OPENAI_API_KEY",
+            "MLFLOW_TRACKING_URI",
+            "MLFLOW_EXPERIMENT_NAME",
+            "MLFLOW_ACTIVE_MODEL_NAME",
+            "OLLAMA_BASE_URL",
+            "OLLAMA_MODEL",
+            "OPENAI_MODEL",
+            # "MLFLOW_ENABLE_ASYNC_TRACE_LOGGING",
+            # "MLFLOW_ASYNC_TRACE_LOGGING_MAX_WORKERS",
+            # "MLFLOW_ASYNC_TRACE_LOGGING_MAX_QUEUE_SIZE",
+            # "MLFLOW_TRACE_SAMPLING_RATIO",
+        ]
+
+        for env_var in required_env_vars:
+            assert env_var in os.environ, f"{env_var} environment variable must be set"
+        logger.info("Environment variables are set")
+        return True
+
+
+
 # Additionally mention in your response that you referred to Indian Government's KCC website for the answer which relfects other farmers plan of treatment as well.    
 
     def __init__(self, 
@@ -218,7 +247,54 @@ class OllamaRag:
             collections_to_init: List of collections to initialize (defaults to DEFAULT_COLLECTIONS)
             persist_directory: ChromaDB persistence directory
         """
-        logger.info("🌱 Initializing Enhanced Multi-Plant RAG System...")
+
+        logger.info("Loading environment variables...")
+        load_dotenv()
+
+        logger.info("Checking environment variables set correctly...")
+        self.check_env_vars()
+
+        # Initialize the evaluator with OTel metrics support
+        logger.info("🌱 Initializing Evaluator...")
+        self.evaluator = LLMEvaluator(
+            openai_api_key=os.getenv("OPENAI_API_KEY"),
+            openai_model=os.getenv("OPENAI_MODEL", "gpt-4"),
+            enable_otel_metrics=True,
+            otel_endpoint=os.getenv("OTEL_OTLP_ENDPOINT", "http://localhost:4317")
+        )
+
+        try:
+            app_config = {"version": "1.1.0", "model_in_use": "claude-3-sonnet-20240229"}
+            current_env = os.getenv("APP_ENVIRONMENT", "development")
+            current_app_version = app_config.get("version")
+            context_tags = {
+                "environment": current_env,
+                "app_version": current_app_version,}
+            mlflow.update_current_trace(tags=context_tags)
+            
+            # Setup MLflow
+            logger.info("Setting up MLflow...")
+            self.evaluator.setup_mlflow(
+                tracking_uri=os.getenv("MLFLOW_TRACKING_URI"),
+                experiment_name=os.getenv("MLFLOW_EXPERIMENT_NAME", "llm_tracing_ollama"),
+                active_model_name=os.getenv("MLFLOW_ACTIVE_MODEL_NAME", "llama318b_model"),
+            )
+
+
+            
+        except Exception as e:
+            logger.error(f"Failed to setup MLflow: {e}")
+        finally:
+        # Ensure proper cleanup of OTel resources
+            logger.info("Shutting down evaluator...")
+            self.evaluator.shutdown_async()
+
+        
+
+
+
+
+        logger.info("🌱 Initializing Enhanced Multi-Plant RAG System with LLM...")
         
         # Initialize LLM
         self._initialize_llm(llm_name, temperature)
