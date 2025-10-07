@@ -256,28 +256,30 @@ class LLMEvaluator:
             otel_endpoint: OTLP endpoint for OpenTelemetry Collector
         """
         # TODO: remove this when we are connecting to OpenAI
-        self.openai_model = "llama3.1:8b"
+        # self.openai_model = "llama3.1:8b"
         
-        # Synchronous client
-        self.teacher_model_client = OpenAI(
-            base_url=os.getenv("OLLAMA_BASE_URL"),
-            api_key=os.getenv("OPENAPI_KEY"),
-            max_retries=0,
-            # timeout=custom_timeout,
-        )
+        # # Synchronous client where we are using Ollama
+        # self.teacher_model_client = OpenAI(
+        #     base_url=os.getenv("OLLAMA_BASE_URL"),
+        #     api_key=os.getenv("OPENAPI_KEY"),
+        #     max_retries=0,
+        #     # timeout=custom_timeout,
+        # )
         
         # Async client for concurrent operations
-        self.async_teacher_model_client = AsyncOpenAI(
-            base_url=os.getenv("OLLAMA_BASE_URL"),
-            api_key=os.getenv("OPENAPI_KEY"),
-            max_retries=0,
+        # self.async_teacher_model_client = AsyncOpenAI(
+        #     base_url=os.getenv("OLLAMA_BASE_URL"),
+        #     api_key=os.getenv("OPENAPI_KEY"),
+        #     max_retries=0,
+        #     # timeout=httpx.Timeout(30.0, read=180.0),
+        # )
+        
+        
+        self.openai_model = openai_model
+        self.teacher_model_client = OpenAI(
+            api_key=openai_api_key,
             timeout=httpx.Timeout(30.0, read=180.0),
         )
-        # self.openai_model = openai_model
-        # self.teacher_model_client = OpenAI(
-        #     api_key=openai_api_key,
-        #     timeout=httpx.Timeout(30.0, read=180.0),
-        # )
         self.teacher_model_temperature = teacher_model_temperature
         self.teacher_model_max_tokens = teacher_model_max_tokens
         
@@ -298,9 +300,7 @@ class LLMEvaluator:
         logger.info(f"Initialized LLMEvaluator with model: {openai_model}")
 
     # @mlflow.trace
-    def setup_mlflow(
-        self, tracking_uri: str, experiment_name: str, active_model_name: str = None
-    ):
+    def setup_mlflow(        self, tracking_uri: str, experiment_name: str, active_model_name: str = None    ):
         """
         Setup MLflow tracking
 
@@ -345,14 +345,15 @@ class LLMEvaluator:
         """Convert multi-line string to single line"""
         return " ".join(s.split())
 
-    # @mlflow.trace
-    def generate_expected_response_with_judge_model(self, question: str) -> str:
+    @mlflow.trace
+    def generate_expected_response_with_judge_model(self, question: str, context: str = None) -> str:
         """
         Generate expected/reference response using GPT-4 for evaluation purposes.
         In this call GPT-4 is used as the teacher model also called as reference model or Judge model.
 
         Args:
             question: The question to generate expected response for
+            context: Optional context from ChromaDB retrieval to provide additional information
 
         Returns:
             Generated expected response string
@@ -365,11 +366,22 @@ class LLMEvaluator:
         - Any additional recommendations from Agricultural University from India
         - Local farming practices and conditions in India
         - Safety considerations and application methods
-        """
+        
+        If context information is provided, use it as a primary reference for your response while supplementing with your knowledge."""
+
+        # Build the user message with optional context
+        user_message = question
+        if context:
+            user_message = f"""Context from retrieved documents:
+{context}
+
+Question: {question}
+
+Please provide a comprehensive answer based on the provided context and your expertise."""
 
         messages = [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": question},
+            {"role": "user", "content": user_message},
         ]
 
         try:
@@ -387,23 +399,29 @@ class LLMEvaluator:
             )
             return ""
 
-    # @mlflow.trace
-    def generate_expected_responses(self, questions: List[str]) -> List[str]:
+    @mlflow.trace
+    def generate_expected_responses(self, questions: List[str], contexts: List[str] = None) -> List[str]:
         """
         Generate expected responses for a list of questions
 
         Args:
             questions: List of questions to generate expected responses for
+            contexts: Optional list of context strings retrieved from ChromaDB (one per question)
 
         Returns:
             List of expected responses (single line format)
         """
-        logger.info("Generating expected responses using GPT-4...")
+        logger.info(f"Generating expected responses using {self.openai_model}...")
         expected_responses_judge = []
 
-        for question in questions:
+        # Validate contexts list if provided
+        if contexts and len(contexts) != len(questions):
+            raise ValueError("If contexts are provided, the number of contexts must match the number of questions")
+
+        for i, question in enumerate(questions):
             logger.info(f"Generating expected response for: {question}")
-            expected_resp = self.generate_expected_response_with_judge_model(question)
+            context = contexts[i] if contexts else None
+            expected_resp = self.generate_expected_response_with_judge_model(question, context)
             expected_responses_judge.append(expected_resp)
             logger.info(
                 f"Generated expected response length: {len(expected_resp)} characters"
@@ -417,14 +435,15 @@ class LLMEvaluator:
 
         return expected_responses_judge
 
-    # @mlflow.trace
-    async def generate_expected_response_with_judge_model_async(self, question: str) -> str:
+    @mlflow.trace
+    async def generate_expected_response_with_judge_model_async(self, question: str, context: str = None) -> str:
         """
         Async version: Generate expected/reference response using GPT-4 for evaluation purposes.
         In this call GPT-4 is used as the teacher model also called as reference model or Judge model.
 
         Args:
             question: The question to generate expected response for
+            context: Optional context from ChromaDB retrieval to provide additional information
 
         Returns:
             Generated expected response string
@@ -437,11 +456,22 @@ class LLMEvaluator:
         - Any additional recommendations from Agricultural University from India
         - Local farming practices and conditions in India
         - Safety considerations and application methods
-        """
+        
+        If context information is provided, use it as a primary reference for your response while supplementing with your knowledge."""
+
+        # Build the user message with optional context
+        user_message = question
+        if context:
+            user_message = f"""Context from retrieved documents:
+{context}
+
+Question: {question}
+
+Please provide a comprehensive answer based on the provided context and your expertise."""
 
         messages = [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": question},
+            {"role": "user", "content": user_message},
         ]
 
         try:
@@ -460,23 +490,28 @@ class LLMEvaluator:
             return ""
 
     # @mlflow.trace
-    async def generate_expected_responses_async(self, questions: List[str]) -> List[str]:
+    async def generate_expected_responses_async(self, questions: List[str], contexts: List[str] = None) -> List[str]:
         """
         Async version: Generate expected responses for a list of questions concurrently.
         This can significantly speed up processing when multiple questions are involved.
 
         Args:
             questions: List of questions to generate expected responses for
+            contexts: Optional list of context strings retrieved from ChromaDB (one per question)
 
         Returns:
             List of expected responses (single line format)
         """
         logger.info(f"Generating expected responses using {self.openai_model} concurrently...")
         
-        # Create concurrent tasks for all questions
+        # Validate contexts list if provided
+        if contexts and len(contexts) != len(questions):
+            raise ValueError("If contexts are provided, the number of contexts must match the number of questions")
+        
+        # Create concurrent tasks for all questions with their respective contexts
         tasks = [
-            self.generate_expected_response_with_judge_model_async(question)
-            for question in questions
+            self.generate_expected_response_with_judge_model_async(question, contexts[i] if contexts else None)
+            for i, question in enumerate(questions)
         ]
         
         # Execute all tasks concurrently
@@ -500,12 +535,13 @@ class LLMEvaluator:
 
         return expected_responses_judge
 
-    # @mlflow.trace
+    @mlflow.trace
     def evaluate_responses(
         self,
         questions: List[str],
         generated_responses: List[str],
         expected_responses: List[str] = None,
+        contexts: List[str] = None,
         use_judge_model: bool = True,
         session_id: str = None,
         user_id: str = None,
@@ -517,6 +553,7 @@ class LLMEvaluator:
             questions: List of input questions
             generated_responses: List of responses generated by the model being evaluated
             expected_responses: List of expected responses (optional, will generate if not provided)
+            contexts: Optional list of context strings from ChromaDB retrieval (one per question)
             use_judge_model: Whether to use judge model to generate expected responses
             session_id: Session ID for the trace
             user_id: User ID for the trace
@@ -534,7 +571,7 @@ class LLMEvaluator:
         logger.info("Evaluating responses...")
         # Generate expected responses if not provided
         if expected_responses is None and use_judge_model:
-            expected_responses = self.generate_expected_responses(questions)
+            expected_responses = self.generate_expected_responses(questions, contexts)
         elif expected_responses is None:
             raise ValueError(
                 "Either provide expected_responses or set use_judge_model=True"
@@ -564,41 +601,41 @@ class LLMEvaluator:
         logger.info(f"Using metric: {answer_similarity_metric.name}")
 
         # Run evaluation
-        with mlflow.start_run() as run:
-            results = mlflow.evaluate(
-                data=data,
-                targets="expected_response_from_judge",
-                predictions="generated_response",
-                model_type="text",
-                extra_metrics=[answer_similarity_metric],
-                evaluators="default",
-                evaluator_config={
-                    "col_mapping": {
-                        "inputs": "questions",
-                    }
-                },
-            )
+        # with mlflow.start_run() as run:
+        results = mlflow.evaluate(
+            data=data,
+            targets="expected_response_from_judge",
+            predictions="generated_response",
+            model_type="text",
+            extra_metrics=[answer_similarity_metric],
+            evaluators="default",
+            evaluator_config={
+                "col_mapping": {
+                    "inputs": "questions",
+                }
+            },
+        )
 
-            # Log additional information
-            mlflow.log_param("num_questions", len(questions))
-            mlflow.log_param("judge_model", self.openai_model)
-            mlflow.log_param(
-                "teacher_model_temperature", self.teacher_model_temperature
-            )
-            mlflow.log_param("teacher_model_max_tokens", self.teacher_model_max_tokens)
-            mlflow.log_metrics(results.metrics)
+        # Log additional information
+        mlflow.log_param("num_questions", len(questions))
+        mlflow.log_param("judge_model", self.openai_model)
+        mlflow.log_param(
+            "teacher_model_temperature", self.teacher_model_temperature
+        )
+        mlflow.log_param("teacher_model_max_tokens", self.teacher_model_max_tokens)
+        mlflow.log_metrics(results.metrics)
 
-            # Build metadata dictionary
-            # trace_metadata = {}            
-            # # Add metrics to metadata
-            # for metric_key, metric_value in results.metrics.items():
-            #     trace_metadata[f"metric.{metric_key}"] = str(metric_value)
-            # trace_metadata["mlflow.trace.runid"] = run.info.run_id
-            # mlflow.update_current_trace(metadata=trace_metadata)
-            
-            run_id = run.info.run_id
-
-        mlflow.end_run()
+        # Build metadata dictionary
+        # trace_metadata = {}            
+        # # Add metrics to metadata
+        # for metric_key, metric_value in results.metrics.items():
+        #     trace_metadata[f"metric.{metric_key}"] = str(metric_value)
+        # trace_metadata["mlflow.trace.runid"] = run.info.run_id
+        # mlflow.update_current_trace(metadata=trace_metadata)
+        
+        #     run_id = run.info.run_id
+        run_id = mlflow.active_run().info.run_id
+        # mlflow.end_run()
         logger.info("Evaluation complete.")
         logger.info(f"Metrics:\n{results.metrics}")
 
@@ -620,7 +657,7 @@ class LLMEvaluator:
                 )
                 logger.info("Metrics successfully sent to OpenTelemetry Collector")
             except Exception as e:
-                logger.error(f"Failed to send metrics to OTel Collector: {e}")
+                logger.error(f"Failed to send evaluation metrics to OTel Collector: {e}")
 
         return {"metrics": results.metrics, "run_id": run_id, "results": results}
 
@@ -630,6 +667,7 @@ class LLMEvaluator:
         questions: List[str],
         generated_responses: List[str],
         expected_responses: List[str] = None,
+        contexts: List[str] = None,
         use_judge_model: bool = True,
         session_id: str = None,
         user_id: str = None,
@@ -642,6 +680,7 @@ class LLMEvaluator:
             questions: List of input questions
             generated_responses: List of responses generated by the model being evaluated
             expected_responses: List of expected responses (optional, will generate if not provided)
+            contexts: Optional list of context strings from ChromaDB retrieval (one per question)
             use_judge_model: Whether to use judge model to generate expected responses
             session_id: Session ID for the trace
             user_id: User ID for the trace
@@ -658,7 +697,7 @@ class LLMEvaluator:
         logger.info("Evaluating responses asynchronously...")
         # Generate expected responses if not provided (this is the async part)
         if expected_responses is None and use_judge_model:
-            expected_responses = await self.generate_expected_responses_async(questions)
+            expected_responses = await self.generate_expected_responses_async(questions, contexts)
         elif expected_responses is None:
             raise ValueError(
                 "Either provide expected_responses or set use_judge_model=True"
