@@ -261,7 +261,7 @@ class OllamaRag:
             openai_api_key=os.getenv("OPENAI_API_KEY"),
             openai_model=os.getenv("OPENAI_MODEL", "gpt-4"),
             enable_otel_metrics=True,
-            otel_endpoint=os.getenv("OTEL_OTLP_ENDPOINT", "http://localhost:4317")
+            otel_endpoint=os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4317")
         )
 
         try:
