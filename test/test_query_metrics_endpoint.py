@@ -6,10 +6,10 @@ and comprehensive metrics logging functionality.
 """
 
 import requests
-import json
 import time
 import sys
 import uuid
+import argparse
 from typing import Dict, Any, Optional
 from datetime import datetime
 
@@ -85,7 +85,7 @@ class MetricsTester:
                 try:
                     error_json = response.json()
                     error_detail = error_json.get('detail', error_detail)
-                except:
+                except ValueError:
                     pass
                 print(f"   Error Response: {error_detail}")
                 print("\n❌ FAILED")
@@ -188,11 +188,57 @@ def check_server_health(base_url: str) -> bool:
         return False
 
 
+def parse_arguments():
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(
+        description="Test script for the Prescription RAG API /query/metrics endpoint",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python test_query_metrics_endpoint.py --url http://localhost:8081
+  python test_query_metrics_endpoint.py --host localhost --port 8081
+  python test_query_metrics_endpoint.py --host 0.0.0.0 --port 8081
+        """
+    )
+    
+    # Option 1: Full URL
+    parser.add_argument(
+        "--url", 
+        type=str, 
+        help="Full URL of the prescription API (e.g., http://localhost:8081)"
+    )
+    
+    # Option 2: Host and port separately
+    parser.add_argument(
+        "--host", 
+        type=str, 
+        default="0.0.0.0",
+        help="Host of the prescription API (default: 0.0.0.0)"
+    )
+    
+    parser.add_argument(
+        "--port", 
+        type=int, 
+        default=8081,
+        help="Port of the prescription API (default: 8081)"
+    )
+    
+    args = parser.parse_args()
+    
+    # Determine the base URL
+    if args.url:
+        base_url = args.url.rstrip('/')
+    else:
+        base_url = f"http://{args.host}:{args.port}"
+    
+    return base_url
+
+
 def main():
     """Main function to run metrics query tests."""
     
-    # Configuration
-    base_url = "http://0.0.0.0:8081"  # Default from start_server.py
+    # Parse command line arguments
+    base_url = parse_arguments()
     
     print("🚀 Prescription RAG API - Query Metrics Endpoint Tester")
     print(f"   Target URL: {base_url}")
@@ -205,6 +251,9 @@ def main():
         print("   python api/start_server.py")
         print("   # or")
         print("   ./run_api.sh")
+        print(f"\n💡 To test a different URL, run:")
+        print(f"   python test/test_query_metrics_endpoint.py --url <your_url>")
+        print(f"   python test/test_query_metrics_endpoint.py --host <host> --port <port>")
         sys.exit(1)
     
     # Initialize tester

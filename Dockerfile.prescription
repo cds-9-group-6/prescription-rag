@@ -37,6 +37,7 @@ COPY ./api ./api
 
 # Copy the RAG module  
 COPY ./rag ./rag
+COPY ./observability ./observability
 
 # Copy data files
 # COPY ./data ./data
@@ -57,7 +58,8 @@ ENV OLLAMA_HOST=http://localhost:11434 \
     CHROMA_PORT=8000 \
     MLFLOW_TRACKING_URI=http://localhost:5001 \
     MLFLOW_EXPERIMENT_NAME= \
-    MLFLOW_REGISTRY_URI=http://localhost:5001
+    MLFLOW_REGISTRY_URI=http://localhost:5001 \
+    OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector.sasya-arogya.svc.cluster.local:4317
 
 # Environment variables
 # ENV OLLAMA_HOST=http://localhost:11434

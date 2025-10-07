@@ -34,7 +34,7 @@ class OTelMetricsExporter:
     
     def __init__(
         self, 
-        otlp_endpoint: str = "http://localhost:4317",
+        otlp_endpoint: str = None,
         export_interval_millis: int = 10000,  # 10 seconds
         service_name: str = "llm-evaluation-service",
         service_version: str = "1.0.0"
@@ -48,9 +48,15 @@ class OTelMetricsExporter:
             service_name: Name of the service for metric labeling
             service_version: Version of the service for metric labeling
         """
+        # Use environment variable or provided endpoint, with fallback to localhost
+        if otlp_endpoint is None:
+            otlp_endpoint = os.getenv('OTEL_EXPORTER_OTLP_ENDPOINT', 'http://localhost:4317')
+        
         self.otlp_endpoint = otlp_endpoint
         self.service_name = service_name
         self.service_version = service_version
+        
+        logger.info(f"Initialized OTelMetricsExporter with endpoint: {otlp_endpoint}")
         
         # Create OTLP exporter
         otlp_exporter = OTLPMetricExporter(
@@ -242,7 +248,7 @@ class LLMEvaluator:
         teacher_model_temperature: float = 0.7,
         teacher_model_max_tokens: int = 1500,
         enable_otel_metrics: bool = True,
-        otel_endpoint: str = "http://localhost:4317",
+        otel_endpoint: str = None,
     ):
         """
         Initialize the evaluator with OpenAI credentials
@@ -287,6 +293,10 @@ class LLMEvaluator:
         self.otel_metrics_exporter = None
         if enable_otel_metrics:
             try:
+                # Use provided endpoint or fallback to environment variable
+                if otel_endpoint is None:
+                    otel_endpoint = os.getenv('OTEL_EXPORTER_OTLP_ENDPOINT', 'http://localhost:4317')
+                
                 self.otel_metrics_exporter = OTelMetricsExporter(
                     otlp_endpoint=otel_endpoint,
                     service_name="llm-evaluation-service",
