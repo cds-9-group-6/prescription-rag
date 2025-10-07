@@ -125,7 +125,14 @@ The vector database in two ways:
 ## commands to deploy in local
 
 1. Ollama with llama3.1:8b
+
+```bash
 ollama is running as a native app on macbook
+
+or
+
+podman run -d --rm -p 11434:11434 --name my-ollama localhost/ollama-multi-model:linux-arm64-v1.0
+```
 
 2. Chromadb
 
@@ -147,4 +154,23 @@ podman run -it  --name prescription  --env-file=.env -v ~/.cache/huggingface:/ro
 
 # if cache dir doesn't exists
 podman run -it  --name prescription  --env-file=.env -v huggingface-cache:/root/.cache/huggingface -p 8081:8081 quay.io/rajivranjan/prescription:arm64-v1.1
+```
+
+4. OpenTelemetery
+
+```bash
+podman run -d  --name otel-collector  --rm  --platform linux/arm64  --mount type=bind,source=$(pwd)/observability/config-files/otel_collector_config.yml,destination=/etc/otelcol-contrib/config.yaml  -p 4317:4317  -p 4318:4318  -p 8889:8889  otel/opentelemetry-collector-contrib:latest
+
+```
+
+5. Prometheus
+
+```bash
+podman run --platform linux/arm64 --name my-prometheus --mount type=bind,source=$(pwd)/observability/config-files/prometheus.yml,destination=/etc/prometheus/prometheus.yml -v prometheus-data:/prometheus -p 9090:9090 -d prom/prometheus:latest --config.file=/etc/prometheus/prometheus.yml --web.enable-otlp-receiver --enable-feature=otlp-deltatocumulative
+```
+
+6. Grafana
+
+```bash
+podman run --platform linux/arm64 -d --name=grafana -p 3000:3000 --mount type=bind,source=$(pwd)/observability/config-files/grafana/grafana.ini,destination=/etc/grafana/grafana.ini --mount type=bind,source=$(pwd)/observability/config-files/grafana/grafana_provisioning,destination=/etc/grafana/provisioning -v grafana-data:/var/lib/grafana grafana/grafana-oss:latest
 ```

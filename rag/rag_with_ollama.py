@@ -4,6 +4,11 @@ import logging
 import os
 from typing import Dict, List, Optional
 
+from dotenv import load_dotenv
+import mlflow
+from observability.inference_tracking import LLMEvaluator
+
+
 import chromadb
 # from langchain.chains.retrieval_qa.base import RetrievalQA
 from langchain.chains import RetrievalQA
@@ -19,6 +24,7 @@ from langchain_core.prompts import PromptTemplate
 from langchain_core.prompts import ChatPromptTemplate
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain.chains import create_retrieval_chain
+from mlflow.entities import SpanType
 
 # Configure logging
 logging.basicConfig(
@@ -197,6 +203,30 @@ class OllamaRag:
 
         """
 
+    # @mlflow.trace()
+    def check_env_vars(self):
+        """Check if all required environment variables are set"""
+        required_env_vars = [
+            "OPENAI_API_KEY",
+            "MLFLOW_TRACKING_URI",
+            "MLFLOW_EXPERIMENT_NAME",
+            "MLFLOW_ACTIVE_MODEL_NAME",
+            "OLLAMA_BASE_URL",
+            "OLLAMA_MODEL",
+            "OPENAI_MODEL",
+            # "MLFLOW_ENABLE_ASYNC_TRACE_LOGGING",
+            # "MLFLOW_ASYNC_TRACE_LOGGING_MAX_WORKERS",
+            # "MLFLOW_ASYNC_TRACE_LOGGING_MAX_QUEUE_SIZE",
+            # "MLFLOW_TRACE_SAMPLING_RATIO",
+        ]
+
+        for env_var in required_env_vars:
+            assert env_var in os.environ, f"{env_var} environment variable must be set"
+        logger.info("Environment variables are set")
+        return True
+
+
+
 # Additionally mention in your response that you referred to Indian Government's KCC website for the answer which relfects other farmers plan of treatment as well.    
 
     def __init__(self, 
@@ -218,7 +248,57 @@ class OllamaRag:
             collections_to_init: List of collections to initialize (defaults to DEFAULT_COLLECTIONS)
             persist_directory: ChromaDB persistence directory
         """
-        logger.info("🌱 Initializing Enhanced Multi-Plant RAG System...")
+
+        logger.info("Loading environment variables...")
+        load_dotenv()
+        load_dotenv(dotenv_path='.env.local', override=True)
+        logger.info("Checking environment variables set correctly...")
+        self.check_env_vars()
+
+        # Initialize the evaluator with OTel metrics support
+        logger.info("🌱 Initializing Evaluator...")
+        self.evaluator = LLMEvaluator(
+            openai_api_key=os.getenv("OPENAI_API_KEY"),
+            openai_model=os.getenv("OPENAI_MODEL", "gpt-4"),
+            enable_otel_metrics=True,
+            otel_endpoint=os.getenv("OTEL_OTLP_ENDPOINT", "http://localhost:4317")
+        )
+
+        try:
+            # Setup MLflow
+            logger.info("Setting up MLflow...")
+            self.evaluator.setup_mlflow(
+                tracking_uri=os.getenv("MLFLOW_TRACKING_URI"),
+                experiment_name=os.getenv("MLFLOW_EXPERIMENT_NAME", "llm_tracing_ollama"),
+                active_model_name=os.getenv("MLFLOW_ACTIVE_MODEL_NAME", "llama318b_model"),
+            )
+            
+            # # Update current trace with app config
+            # app_config = {"version": "1.1.0", "model_in_use": "claude-3-sonnet-20240229"}
+            # current_env = os.getenv("APP_ENVIRONMENT", "development")
+            # current_app_version = app_config.get("version")
+            # context_tags = {
+            #     "environment": current_env,
+            #     "app_version": current_app_version,}
+            # mlflow.update_current_trace(tags=context_tags)
+            
+            
+
+
+
+        except Exception as e:
+            logger.error(f"Failed to setup MLflow: {e}")
+        # finally:
+        # # Ensure proper cleanup of OTel resources
+        #     logger.info("Shutting down evaluator...")
+        #     self.evaluator.shutdown()
+
+        
+
+
+
+
+        logger.info("🌱 Initializing Enhanced Multi-Plant RAG System with LLM...")
         
         # Initialize LLM
         self._initialize_llm(llm_name, temperature)
@@ -585,6 +665,9 @@ class OllamaRag:
             
             raise RuntimeError(f"RAG query failed: {e}")
     
+
+    # @mlflow.start_run()
+    @mlflow.trace(span_type=SpanType.CHAIN,attributes={"span.name": "run_query_with_metrics"})
     def run_query_with_metrics(self, 
                               query_request: str, 
                               plant_type: Optional[str] = None,
@@ -608,58 +691,111 @@ class OllamaRag:
         Returns:
             Answer from the RAG system
         """
+
+        
         import time
+        import mlflow
         start_time = time.time()
 
         try:
-            answer = None
-            # Determine which collection to use
-            if plant_type and plant_type in self.chroma_databases:
-                collection_name = plant_type
-                logger.debug(f"🎯 Using explicit plant type: {plant_type}")
-            else:
-                collection_name = self._detect_plant_type(query_request)
-            
-            # Get the appropriate ChromaDB instance (not retriever)
-            if collection_name not in self.chroma_databases:
-                logger.warning(f"⚠️  Collection {collection_name} not available, falling back to {self.default_collection}")
-                collection_name = self.default_collection
-            
-            logger.debug(f"🔍 Querying collection: {collection_name}")
-
-            chroma_db = self.chroma_databases[collection_name]
-            retrieval_qa = self.retrievers[collection_name]
-            rag_chain = self.rag_chains[collection_name]
-
-            augmented_query_request = f"{query_request} \n StateName: {location} \n Disease: {disease} \n Season: {season}"
-
-            docs_unfiltered = chroma_db.similarity_search(augmented_query_request, k=6)
-            # docs_filtered = []
-            # docs_filtered_count = 0
-            
-            logger.info("🔍 Using RAG chain invocation with mmr search")
-
-            logger.debug(f"🔍 Augmented query request: {augmented_query_request}")
-            result = rag_chain.invoke({"input": augmented_query_request})
-
-            if result["context"]:
-                self.log_result(result)
-            else:
-                logger.warning("⚠️  No documents found with metadata filters, trying without filters...")
+            with mlflow.start_run() as run:
+                answer = None
+                # Determine which collection to use
+                if plant_type and plant_type in self.chroma_databases:
+                    collection_name = plant_type
+                    logger.debug(f"🎯 Using explicit plant type: {plant_type}")
+                else:
+                    collection_name = self._detect_plant_type(query_request)
                 
-            answer = result["answer"]
+                # Get the appropriate ChromaDB instance (not retriever)
+                if collection_name not in self.chroma_databases:
+                    logger.warning(f"⚠️  Collection {collection_name} not available, falling back to {self.default_collection}")
+                    collection_name = self.default_collection
+                
+                logger.debug(f"🔍 Querying collection: {collection_name}")
 
-            # Getting the actual docs used
-            actual_docs_used = len(result.get("source_documents", []))
+                chroma_db = self.chroma_databases[collection_name]
+                retrieval_qa = self.retrievers[collection_name]
+                rag_chain = self.rag_chains[collection_name]
 
-            end_time = time.time()
-            query_time = end_time - start_time
+                augmented_query_request = f"{query_request} \n StateName: {location} \n Disease: {disease} \n Season: {season}"
 
-            # Log comprehensive RAG metrics to MLflow
-            if mlflow_manager and mlflow_manager.is_available():
-                try:
-                    import mlflow
+                docs_unfiltered = chroma_db.similarity_search(augmented_query_request, k=6)
+                # docs_filtered = []
+                # docs_filtered_count = 0
+                
+                logger.info("🔍 Using RAG chain invocation with mmr search")
+
+                logger.debug(f"🔍 Augmented query request: {augmented_query_request}")
+                result = rag_chain.invoke({"input": augmented_query_request})
+
+                if result["context"]:
+                    self.log_result(result)
+                else:
+                    logger.warning("⚠️  No documents found with metadata filters, trying without filters...")
                     
+                answer = result["answer"]
+
+                # Getting the actual docs used
+                actual_docs_used = len(result.get("context", []))
+
+                end_time = time.time()
+                query_time = end_time - start_time
+
+                try:
+                    # Extract context from RAG result for judge model evaluation
+                    context_for_judge = result.get("context", "")
+                    if isinstance(context_for_judge, list):
+                        # If context is a list of documents, join them
+                        context_for_judge = "\n\n".join([str(doc) for doc in context_for_judge])
+                    
+                    # Evaluate the answer with the evaluator
+                    evaluation_results = self.evaluator.evaluate_responses(
+                        questions=[query_request],
+                        generated_responses=[answer],
+                        contexts=[context_for_judge] if context_for_judge else None,
+                        use_judge_model=True,
+                        session_id=session_id,
+                        user_id="user_id",
+                    )
+
+                    
+                    # Print results
+                    print("\n" + "="*50)
+                    print("EVALUATION RESULTS")
+                    print("="*50)
+                    print(f"Run ID: {evaluation_results['run_id']}")
+                    print(f"Metrics: {evaluation_results['metrics']}")
+                    
+                    # Extract specific metrics
+                    metrics = evaluation_results['metrics']
+                    if 'answer_similarity/v1/score' in metrics:
+                        print(f"Answer Similarity Score: {metrics['answer_similarity/v1/score']}")
+                    
+                    print("\nMetrics exported to OpenTelemetry Collector for Prometheus scraping")
+                    logger.info("All metrics have been sent to OpenTelemetry Collector")
+                except Exception as e:
+                    logger.error(f"Failed to log evaluation results to MLflow: {e}")
+                
+
+                # Log comprehensive RAG metrics to MLflow
+                # if mlflow_manager and mlflow_manager.is_available():
+                try:
+
+
+
+                    # import mlflow
+                
+                    # Update current trace with app config
+                    app_config = {"version": "1.1.0", "model_in_use": "llama3.1:8b"}
+                    current_env = os.getenv("APP_ENVIRONMENT", "unspecified")
+                    current_app_version = app_config.get("version")
+                    context_tags = {
+                        "environment": current_env,
+                        "app_version": current_app_version,}
+                    mlflow.update_current_trace(tags=context_tags)
+
+
                     # Basic RAG metrics
                     mlflow.log_metric("rag_query_time_seconds", query_time)
                     mlflow.log_metric("rag_docs_unfiltered_count", len(docs_unfiltered))
@@ -700,14 +836,69 @@ class OllamaRag:
                     mlflow.log_metric("rag_query_success", 1)
                     mlflow.log_metric("rag_fallback_used", 0)
                     
+                    
+                    if self.evaluator.otel_metrics_exporter:
+                        try:
+                            # Collect parameters as labels
+                            otel_labels = {
+                                "rag_collection_used": collection_name,
+                                "rag_plant_type_detected": collection_name,
+                                "rag_has_season_filter": str(season is not None),
+                                "rag_has_location_filter": str(location is not None),
+                                "rag_has_disease_filter": str(disease is not None),
+                                "rag_query_length": str(len(query_request)),
+                            }
+                            if season:
+                                otel_labels["rag_season_filter"] = season
+                            if location:
+                                otel_labels["rag_location_filter"] = location
+                            if disease:
+                                otel_labels["rag_disease_filter"] = disease
+
+                            # Add static and model info
+                            otel_labels.update({
+                                "model_type": "text",
+                                "judge_model": getattr(self.evaluator, "openai_model", "unknown"),
+                            })
+
+                            # Collect metrics
+                            otel_metrics = {
+                                "rag_query_time_seconds": query_time,
+                                "rag_docs_unfiltered_count": len(docs_unfiltered),
+                                "rag_docs_actually_used": actual_docs_used,
+                                "rag_query_word_count": len(query_request.split()),
+                                "rag_response_length": len(answer),
+                                "rag_response_word_count": len(answer.split()),
+                                "rag_docs_to_response_ratio": len(answer) / actual_docs_used if actual_docs_used > 0 else 0,
+                                "rag_query_success": 1,
+                                "rag_fallback_used": 0,
+                            }
+
+                            self.evaluator.otel_metrics_exporter.send_metrics(
+                                metrics_dict=otel_metrics,
+                                run_id=mlflow.active_run().info.run_id,
+                                session_id=session_id,
+                                user_id="user_id",
+                                additional_labels=otel_labels
+                            )
+                            logger.info("Metrics successfully sent to OpenTelemetry Collector")
+                        except Exception as e:
+                            logger.error(f"Failed to send rag metrics to OTel Collector: {e}")
+
+
+
                     logger.info(f"✅ RAG metrics logged - Collection: {collection_name}, Docs: {actual_docs_used}, Time: {query_time:.2f}s")
                     
                 except Exception as e:
                     logger.warning(f"Failed to log RAG metrics to MLflow: {e}")
-            
-            logger.info(f"✅ Query completed successfully using collection: {collection_name} with {actual_docs_used} documents in {query_time:.2f}s")
+                finally:
+                    # Ensure proper cleanup of OTel resources
+                    logger.info("Shutting down evaluator...")
+                    self.evaluator.shutdown()
+                    
+                logger.info(f"✅ Query completed successfully using collection: {collection_name} with {actual_docs_used} documents in {query_time:.2f}s")
 
-            return answer
+                return answer
 
         except Exception as e:
 
@@ -755,10 +946,14 @@ class OllamaRag:
                     except:
                         pass
             raise RuntimeError(f"RAG query failed: {e}")
-        
-        # END
+
             
-        
+        finally:
+            # run_id = mlflow.active_run().info.run_id
+            # mlflow.set_tag("run_id", run_id)
+            mlflow.end_run()
+        # END
+
         # try:
         #     # Determine which collection to use
         #     if plant_type and plant_type in self.chroma_databases:
