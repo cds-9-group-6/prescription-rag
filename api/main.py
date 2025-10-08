@@ -193,7 +193,7 @@ async def run_query(request: QueryRequest):
         )
 
 
-@app.post("/query/metrics", response_model=QueryResponse)
+@app.post("/query/metrics")
 async def run_query_with_metrics(request: QueryWithMetricsRequest):
     """Run a query with comprehensive metrics logging."""
     if not rag_system:
@@ -212,7 +212,7 @@ async def run_query_with_metrics(request: QueryWithMetricsRequest):
             collection_used = rag_system._detect_plant_type(request.query)
         
         # Run the query with metrics (pass None for mlflow_manager since we're not using it in API)
-        answer = rag_system.run_query_with_metrics(
+        wrapped_response = rag_system.run_query_with_metrics(
             query_request=request.query,
             plant_type=request.plant_type,
             season=request.season,
@@ -224,12 +224,13 @@ async def run_query_with_metrics(request: QueryWithMetricsRequest):
         
         query_time = time.time() - start_time
         
-        return QueryResponse(
-            answer=answer,
-            collection_used=collection_used,
-            query_time=query_time,
-            success=True
-        )
+        # Add additional metadata to the wrapped response for compatibility
+        wrapped_response["collection_used"] = collection_used
+        wrapped_response["query_time"] = query_time
+        
+        logger.info(f"✅ Wrapped response before returning to engine: {wrapped_response}")
+
+        return wrapped_response
         
     except Exception as e:
         logger.error(f"Query with metrics failed: {e}")

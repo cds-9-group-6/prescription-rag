@@ -3,7 +3,7 @@ import logging
 # import uvicorn
 import os
 import threading
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 
 from dotenv import load_dotenv
 import mlflow
@@ -90,6 +90,11 @@ class OllamaRag:
 
         **REQUIRED JSON OUTPUT FORMAT:**
         {{
+            "comments": {{
+                "comment": "mention how system used KccAns and context to formulate the response. appreciate the user to share the context if provided.",
+                "KccAns": "As per KccAns what is the treatment plan",
+                "other_comments": "Other comments from the system related to season, location, disease, etc."
+            }},
             "diagnosis": {{
                 "disease_name": "Name of the disease/problem identified",
                 "symptoms": ["symptom1", "symptom2", "symptom3"],
@@ -169,12 +174,13 @@ class OllamaRag:
         - Consolidate medicine recommendations into primary and secondary treatments to avoid confusion.
         - Base recommendations on the KccAns information when available, otherwise use your agricultural knowledge.
         - Keep medicine recommendations practical and avoid listing too many options.
+        - When KccAns will be present in the response value, then replace it with the Indian Govt Kisan Call Center.
 
         CONTEXT:
         {context}
 
         QUESTION:
-        {question}
+        {input}
 
         JSON OUTPUT:
         """
@@ -306,7 +312,8 @@ class OllamaRag:
         
         # Create application prompt template from system prompt
         self.APP_PROMPT=ChatPromptTemplate.from_messages([
-            ("system", self.SYSTEM_PROMPT),
+            # ("system", self.SYSTEM_PROMPT),
+            ("system", self.prompt_template),
             ("human", "{input}"),
         ])
         self.question_answer_chain = create_stuff_documents_chain(self.llm, self.APP_PROMPT)
@@ -315,6 +322,7 @@ class OllamaRag:
         # Initialize prompt template
         self.PROMPT = PromptTemplate(
             template=self.prompt_template, input_variables=["context", "question"]
+            # template=self.prompt_template, input_variables=["context", "input"]
         )
         self.chain_type_kwargs = {"prompt": self.PROMPT}
         
@@ -839,6 +847,72 @@ class OllamaRag:
 
         logger.info(f"✅ Background post-processing completed for collection: {collection_name}")
 
+    def _wrap_prescription_response(self, answer: str, collection_name: str, query_time: float, 
+                                   actual_docs_used: int, session_id: str) -> Dict[str, Any]:
+        """
+        Wrap the RAG response with minimal structure for prescription_tool.py compatibility
+        
+        Args:
+            answer: Raw answer from the RAG system (JSON string from LLM)
+            collection_name: Name of the collection used
+            query_time: Time taken for the query
+            actual_docs_used: Number of documents used
+            session_id: Session ID for tracking
+            
+        Returns:
+            Dictionary with treatment key wrapping the LLM JSON response
+        """
+        import json
+        
+        try:
+            # Try to parse the JSON response from the LLM
+            if isinstance(answer, str):
+                # Clean the response - remove any potential markdown formatting
+                cleaned_answer = answer.strip()
+                if cleaned_answer.startswith("```json"):
+                    cleaned_answer = cleaned_answer[7:]
+                if cleaned_answer.endswith("```"):
+                    cleaned_answer = cleaned_answer[:-3]
+                cleaned_answer = cleaned_answer.strip()
+                
+                # Parse the JSON
+                treatment_data = json.loads(cleaned_answer)
+            else:
+                # If answer is already a dict
+                treatment_data = answer
+            
+            # Minimal wrap - just add the "treatment" key that prescription_tool.py expects
+            wrapped_response = {
+                "success": True,
+                "treatment": treatment_data
+            }
+            
+            logger.info(f"✅ Successfully wrapped prescription response for session: {session_id}")
+            logger.info(f"✅ Wrapped response: {wrapped_response}")
+            return wrapped_response
+            
+        except json.JSONDecodeError as e:
+            logger.error(f"❌ Failed to parse JSON response: {e}")
+            
+            # Return the raw answer if JSON parsing fails - let prescription_tool handle it
+            return {
+                "success": False,
+                "treatment": {},
+                "error": f"JSON parsing failed: {str(e)}",
+                "raw_response": answer
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Unexpected error wrapping prescription response: {e}")
+            
+            # Return the raw answer if wrapping fails
+            return {
+                "success": False,
+                "treatment": {},
+                "error": f"Wrapping failed: {str(e)}",
+                "raw_response": answer
+            }
+
     # @mlflow.start_run()
     @mlflow.trace(span_type=SpanType.CHAIN,attributes={"span.name": "run_query_with_metrics"})
     def run_query_with_metrics(self, 
@@ -938,7 +1012,16 @@ class OllamaRag:
                 
                 logger.info(f"✅ Query completed successfully using collection: {collection_name} with {actual_docs_used} documents in {query_time:.2f}s (post-processing running in background)")
 
-                return answer
+                # Wrap the answer in the expected structure for prescription_tool.py
+                wrapped_response = self._wrap_prescription_response(
+                    answer, 
+                    collection_name, 
+                    query_time, 
+                    actual_docs_used,
+                    session_id
+                )
+                logger.info(f"✅ Wrapped response: {wrapped_response}")
+                return wrapped_response
 
         except Exception as e:
 
@@ -972,7 +1055,15 @@ class OllamaRag:
                     except:
                         pass
 
-                return answer
+                # Wrap fallback response too
+                fallback_wrapped = self._wrap_prescription_response(
+                    answer, 
+                    self.default_collection, 
+                    query_time, 
+                    0,  # No docs count available for fallback
+                    session_id
+                )
+                return fallback_wrapped
                     
             except Exception as fallback_error:
                 logger.error(f"❌ Fallback query also failed: {fallback_error}")
