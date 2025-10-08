@@ -289,26 +289,7 @@ def main():
     print("🧪 RUNNING METRICS QUERY TESTS")
     print("=" * 70)
     
-    # Test 1: Basic tomato disease query with metrics (using structured format like prescription_tool.py)
-    tester.test_metrics_query(
-        disease_name="Early Blight",
-        plant_type="Tomato",
-        season="Summer",
-        location="Karnataka",
-        severity="Medium"
-    )
-    
-    # Test 2: Potato blight with different session
-    tester.test_metrics_query(
-        disease_name="Late Blight",
-        plant_type="Potato",
-        location="Punjab",
-        season="Rabi",
-        severity="High",
-        session_id="potato_query_session"
-    )
-    
-    # Test 3: Custom query format (override structured format)
+    # Test 1: Custom query format (override structured format)
     tester.test_metrics_query(
         query="What are common diseases in tomatoes and how to treat them?",
         disease_name="General Tomato Diseases",
@@ -317,67 +298,86 @@ def main():
         location="Karnataka"
     )
     
-    # Test 4: Rice disease query 
-    tester.test_metrics_query(
-        disease_name="Brown Spot",
-        plant_type="Rice",
-        season="Kharif",
-        location="West Bengal",
-        severity="Medium"
-    )
+    # # Test 2: Potato blight with different session
+    # tester.test_metrics_query(
+    #     disease_name="Late Blight",
+    #     plant_type="Potato",
+    #     location="Punjab",
+    #     season="Rabi",
+    #     severity="High",
+    #     session_id="potato_query_session"
+    # )
     
-    # Test 5: Apple pest query
-    tester.test_metrics_query(
-        disease_name="Scab",
-        plant_type="Apple",
-        season="Spring",
-        location="Himachal Pradesh",
-        severity="Low"
-    )
+    # # Test 3: Basic tomato disease query with metrics (using structured format like prescription_tool.py)
+    # tester.test_metrics_query(
+    #     disease_name="Early Blight",
+    #     plant_type="Tomato",
+    #     season="Summer",
+    #     location="Karnataka",
+    #     severity="Medium"
+    # )
     
-    # Test 6: Multiple queries with same session ID
-    session_queries = [
-        {
-            "disease_name": "Root Wilt",
-            "plant_type": "Coconut",
-            "location": "Kerala",
-            "season": "Monsoon",
-            "severity": "High"
-        },
-        {
-            "disease_name": "Leaf Blight", 
-            "plant_type": "Coconut",
-            "location": "Kerala",
-            "season": "Monsoon",
-            "severity": "Medium"
-        },
-        {
-            "disease_name": "Stem Bleeding",
-            "plant_type": "Coconut",
-            "location": "Kerala", 
-            "season": "Post-Monsoon",
-            "severity": "Low"
-        }
-    ]
+    # # Test 4: Rice disease query 
+    # tester.test_metrics_query(
+    #     disease_name="Brown Spot",
+    #     plant_type="Rice",
+    #     season="Kharif",
+    #     location="West Bengal",
+    #     severity="Medium"
+    # )
     
-    tester.test_multiple_queries_same_session(
-        queries=session_queries,
-        session_id="coconut_consultation_session"
-    )
+    # # Test 5: Apple pest query
+    # tester.test_metrics_query(
+    #     disease_name="Scab",
+    #     plant_type="Apple",
+    #     season="Spring",
+    #     location="Himachal Pradesh",
+    #     severity="Low"
+    # )
     
-    # Test 7: Error scenarios
-    tester.test_error_scenarios()
+    # # Test 6: Multiple queries with same session ID
+    # session_queries = [
+    #     {
+    #         "disease_name": "Root Wilt",
+    #         "plant_type": "Coconut",
+    #         "location": "Kerala",
+    #         "season": "Monsoon",
+    #         "severity": "High"
+    #     },
+    #     {
+    #         "disease_name": "Leaf Blight", 
+    #         "plant_type": "Coconut",
+    #         "location": "Kerala",
+    #         "season": "Monsoon",
+    #         "severity": "Medium"
+    #     },
+    #     {
+    #         "disease_name": "Stem Bleeding",
+    #         "plant_type": "Coconut",
+    #         "location": "Kerala", 
+    #         "season": "Post-Monsoon",
+    #         "severity": "Low"
+    #     }
+    # ]
     
-    # Test 8: Complex disease scenario with detailed context
-    tester.test_metrics_query(
-        query="I am a farmer in Maharashtra and I have been growing tomatoes for the past 5 years. Recently, I noticed that my tomato plants are showing yellow leaves with brown spots, and some fruits are developing dark patches. The weather has been humid and there has been intermittent rainfall. I want to know what disease this might be and what organic treatment options are available that won't harm beneficial insects in my farm.",
-        disease_name="Tomato Blight Complex",
-        plant_type="Tomato",
-        location="Maharashtra",
-        season="Monsoon",
-        severity="Medium",
-        session_id="detailed_consultation_session"
-    )
+    # tester.test_multiple_queries_same_session(
+    #     queries=session_queries,
+    #     session_id="coconut_consultation_session"
+    # )
+    
+    # # Test 7: Error scenarios
+    # tester.test_error_scenarios()
+    
+    # # Test 8: Complex disease scenario with detailed context
+    # tester.test_metrics_query(
+    #     query="I am a farmer in Maharashtra and I have been growing tomatoes for the past 5 years. Recently, I noticed that my tomato plants are showing yellow leaves with brown spots, and some fruits are developing dark patches. The weather has been humid and there has been intermittent rainfall. I want to know what disease this might be and what organic treatment options are available that won't harm beneficial insects in my farm.",
+    #     disease_name="Tomato Blight Complex",
+    #     plant_type="Tomato",
+    #     location="Maharashtra",
+    #     season="Monsoon",
+    #     severity="Medium",
+    #     session_id="detailed_consultation_session"
+    # )
     
     print("\n" + "=" * 70)
     print("✅ All metrics query tests completed!")
