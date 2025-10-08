@@ -136,6 +136,7 @@ class OllamaRag:
                     "application_method": "Spray/Soil application/Foliar",
                     "frequency": "How often to apply",
                     "duration": "Total treatment period",
+                    "when_to_use": "Conditions when to use this",
                     "precautions": ["precaution1", "precaution2"]
                 }},
                 "secondary_treatment": {{
@@ -144,13 +145,20 @@ class OllamaRag:
                     "dosage": "Concentration and quantity",
                     "application_method": "Application method",
                     "frequency": "Frequency of application",
-                    "when_to_use": "Conditions when to use this"
+                    "duration": "Total treatment period",
+                    "when_to_use": "Conditions when to use this",
+                    "precautions": ["precaution1", "precaution2"]
                 }},
                 "organic_alternatives": [
                     {{
-                        "name": "Organic treatment name",
-                        "preparation": "How to prepare",
-                        "application": "How to apply"
+                        "medicine_name": "Secondary/supportive medicine if needed",
+                        "active_ingredient": "Active ingredient name",
+                        "dosage": "Concentration and quantity",
+                        "application_method": "Application method",
+                        "frequency": "Frequency of application",
+                        "duration": "Total treatment period",
+                        "when_to_use": "Conditions when to use this",
+                        "precautions": ["precaution1", "precaution2"]
                     }}
                 ]
             }},
