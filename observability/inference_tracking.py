@@ -107,6 +107,61 @@ class OTelMetricsExporter:
             unit="1"
         )
         
+        # RAG-specific metric instruments for individual metrics
+        self.rag_query_time_gauge = self.meter.create_gauge(
+            name="rag_query_time_seconds",
+            description="RAG query execution time in seconds",
+            unit="s"
+        )
+        
+        self.rag_docs_unfiltered_gauge = self.meter.create_gauge(
+            name="rag_docs_unfiltered_count",
+            description="Number of unfiltered documents retrieved",
+            unit="1"
+        )
+        
+        self.rag_docs_used_gauge = self.meter.create_gauge(
+            name="rag_docs_actually_used",
+            description="Number of documents actually used in RAG response",
+            unit="1"
+        )
+        
+        self.rag_query_word_count_gauge = self.meter.create_gauge(
+            name="rag_query_word_count",
+            description="Word count in the query",
+            unit="1"
+        )
+        
+        self.rag_response_length_gauge = self.meter.create_gauge(
+            name="rag_response_length",
+            description="Character length of RAG response",
+            unit="1"
+        )
+        
+        self.rag_response_word_count_gauge = self.meter.create_gauge(
+            name="rag_response_word_count",
+            description="Word count in RAG response", 
+            unit="1"
+        )
+        
+        self.rag_docs_to_response_ratio_gauge = self.meter.create_gauge(
+            name="rag_docs_to_response_ratio",
+            description="Ratio of response length to number of documents used",
+            unit="1"
+        )
+        
+        self.rag_query_success_gauge = self.meter.create_gauge(
+            name="rag_query_success",
+            description="RAG query success indicator (1=success, 0=failure)",
+            unit="1"
+        )
+        
+        self.rag_fallback_used_gauge = self.meter.create_gauge(
+            name="rag_fallback_used", 
+            description="Whether fallback was used (1=used, 0=not used)",
+            unit="1"
+        )
+        
         logger.info(f"Initialized OTelMetricsExporter with endpoint: {otlp_endpoint}")
     
     def _convert_numpy_to_python(self, value):
@@ -215,6 +270,94 @@ class OTelMetricsExporter:
             
         except Exception as e:
             logger.error(f"Error sending metrics to OTel Collector: {e}")
+            raise
+    
+    def send_rag_metrics(
+        self,
+        metrics_dict: Dict[str, Any],
+        run_id: str = None,
+        session_id: str = None,
+        user_id: str = None,
+        additional_labels: Dict[str, str] = None
+    ):
+        """
+        Send RAG-specific metrics as individual metric names with parameters as labels.
+        This creates metrics like 'rag_query_time_seconds', 'rag_docs_unfiltered_count' etc.
+        instead of bundling them under generic metric names.
+        
+        Args:
+            metrics_dict: Dictionary of RAG metrics 
+            run_id: MLflow run ID
+            session_id: Session ID for tracing
+            user_id: User ID for tracing
+            additional_labels: Additional labels (RAG parameters like collection, filters, etc.)
+        """
+        try:
+            # Base labels for all RAG metrics (these become metric labels, not metric names)
+            base_labels = {
+                "service": self.service_name,
+                "version": self.service_version,
+            }
+            
+            # Add optional labels
+            if run_id:
+                base_labels["run_id"] = run_id
+            if session_id:
+                base_labels["session_id"] = session_id
+            if user_id:
+                base_labels["user_id"] = user_id
+            if additional_labels:
+                base_labels.update(additional_labels)
+            
+            # Send each RAG metric to its dedicated gauge
+            for metric_name, metric_value in metrics_dict.items():
+                # Convert numpy types to Python types
+                converted_value = self._convert_numpy_to_python(metric_value)
+                
+                # Skip if NaN after conversion
+                if pd.isna(converted_value):
+                    logger.warning(f"Skipping RAG metric {metric_name} due to NaN value")
+                    continue
+                
+                # Route to appropriate individual gauge based on metric name
+                gauge = None
+                if metric_name == "rag_query_time_seconds":
+                    gauge = self.rag_query_time_gauge
+                elif metric_name == "rag_docs_unfiltered_count":
+                    gauge = self.rag_docs_unfiltered_gauge
+                elif metric_name == "rag_docs_actually_used":
+                    gauge = self.rag_docs_used_gauge
+                elif metric_name == "rag_query_word_count":
+                    gauge = self.rag_query_word_count_gauge
+                elif metric_name == "rag_response_length":
+                    gauge = self.rag_response_length_gauge
+                elif metric_name == "rag_response_word_count":
+                    gauge = self.rag_response_word_count_gauge
+                elif metric_name == "rag_docs_to_response_ratio":
+                    gauge = self.rag_docs_to_response_ratio_gauge
+                elif metric_name == "rag_query_success":
+                    gauge = self.rag_query_success_gauge
+                elif metric_name == "rag_fallback_used":
+                    gauge = self.rag_fallback_used_gauge
+                else:
+                    # Fallback to general gauge for unknown RAG metrics
+                    logger.warning(f"Unknown RAG metric {metric_name}, using general gauge")
+                    gauge = self.general_gauge
+                    # For general gauge, add metric name as label for backward compatibility
+                    metric_labels_with_name = base_labels.copy()
+                    metric_labels_with_name["metric_name"] = metric_name
+                    gauge.set(converted_value, attributes=metric_labels_with_name)
+                    logger.info(f"Sent RAG metric to general gauge: {metric_name} = {converted_value}")
+                    continue
+                
+                # Send the metric to its dedicated gauge (parameters become labels)
+                gauge.set(converted_value, attributes=base_labels)
+                logger.info(f"Sent RAG metric: {metric_name} = {converted_value} with labels: {base_labels}")
+            
+            logger.info(f"Successfully sent {len(metrics_dict)} RAG metrics as individual metrics to OTel Collector")
+            
+        except Exception as e:
+            logger.error(f"Error sending RAG metrics to OTel Collector: {e}")
             raise
     
     def shutdown(self):

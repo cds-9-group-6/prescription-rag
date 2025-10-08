@@ -2,7 +2,19 @@
 Test script for the /query/metrics endpoint of the Prescription RAG API.
 
 This script tests the metrics-enabled query endpoint which includes session tracking
-and comprehensive metrics logging functionality.
+and comprehensive metrics logging functionality. Updated to match the exact format
+used by prescription_tool.py in sasya-arogya-engine.
+
+The test now supports:
+- Structured query generation matching prescription_tool.py format
+- disease_name, plant_type, season, location, severity parameters
+- Custom query overrides for advanced testing
+- Session tracking and multiple queries per session
+- Error scenario testing
+
+Usage:
+    python test/test_query_metrics_endpoint.py --url http://localhost:8081
+    python test/test_query_metrics_endpoint.py --host 0.0.0.0 --port 8081
 """
 
 import requests
@@ -22,42 +34,53 @@ class MetricsTester:
         self.session = requests.Session()
         self.test_session_id = str(uuid.uuid4())
     
-    def test_metrics_query(self, query: str, plant_type: Optional[str] = None, 
-                          season: Optional[str] = None, location: Optional[str] = None, 
-                          disease: Optional[str] = None, session_id: Optional[str] = None) -> Dict[str, Any]:
-        """Test the /query/metrics endpoint with given parameters."""
+    def test_metrics_query(self, query: str = None, disease_name: str = None,
+                          plant_type: Optional[str] = None, season: Optional[str] = None, 
+                          location: Optional[str] = None, severity: Optional[str] = "Medium",
+                          session_id: Optional[str] = None) -> Dict[str, Any]:
+        """Test the /query/metrics endpoint with given parameters, matching prescription_tool.py format."""
         
         # Use provided session_id or default test session_id
         if session_id is None:
             session_id = self.test_session_id
         
-        # Prepare request data
+        # If no custom query provided, construct the structured query like prescription_tool.py does
+        if query is None and disease_name:
+            query = f"""Disease: {disease_name}
+Plant: {plant_type or "general"}
+Location: {location or ""}
+Season: {season or ""}
+Severity: {severity}
+
+Provide comprehensive treatment recommendations including:
+1. Chemical treatments with dosages and application methods
+2. Organic/natural treatment alternatives
+3. Preventive measures
+4. Application timing and frequency
+5. Safety precautions
+6. Expected recovery timeline
+"""
+        elif query is None:
+            raise ValueError("Either 'query' or 'disease_name' must be provided")
+        
+        # Prepare request data matching prescription_tool.py format
         data = {
             "query": query,
+            "plant_type": plant_type,
+            "season": season,
+            "location": location,
+            "disease": disease_name,  # Note: prescription_tool.py sends disease_name as "disease" field
             "session_id": session_id
         }
         
-        # Add optional parameters
-        if plant_type:
-            data["plant_type"] = plant_type
-        if season:
-            data["season"] = season
-        if location:
-            data["location"] = location
-        if disease:
-            data["disease"] = disease
-        
         print(f"\n🧪 Testing Metrics Query:")
-        print(f"   Query: '{query}'")
+        print(f"   Disease: {disease_name}")
+        print(f"   Plant Type: {plant_type}")
+        print(f"   Season: {season}")
+        print(f"   Location: {location}")
+        print(f"   Severity: {severity}")
         print(f"   Session ID: {session_id}")
-        if plant_type:
-            print(f"   Plant Type: {plant_type}")
-        if season:
-            print(f"   Season: {season}")
-        if location:
-            print(f"   Location: {location}")
-        if disease:
-            print(f"   Disease: {disease}")
+        print(f"   Query Length: {len(query)} characters")
         print("-" * 60)
         
         try:
@@ -127,7 +150,7 @@ class MetricsTester:
         try:
             response = self.session.post(
                 f"{self.base_url}/query/metrics", 
-                json={"query": "", "session_id": "error_test"}
+                json={"query": "", "disease": None, "session_id": "error_test"}
             )
             print(f"   Status Code: {response.status_code}")
             print(f"   Response: {response.text[:200]}...")
@@ -156,7 +179,7 @@ class MetricsTester:
         try:
             response = self.session.post(
                 f"{self.base_url}/query/metrics", 
-                json={"session_id": "missing_query_test"}
+                json={"plant_type": "Tomato", "disease": "Test Disease", "session_id": "missing_query_test"}
             )
             print(f"   Status Code: {response.status_code}")
             print(f"   Response: {response.text[:200]}...")
@@ -266,55 +289,74 @@ def main():
     print("🧪 RUNNING METRICS QUERY TESTS")
     print("=" * 70)
     
-    # Test 1: Basic tomato disease query with metrics
+    # Test 1: Basic tomato disease query with metrics (using structured format like prescription_tool.py)
     tester.test_metrics_query(
-        query="What are common diseases in tomatoes and how to treat them?",
+        disease_name="Early Blight",
         plant_type="Tomato",
         season="Summer",
         location="Karnataka",
-        disease="Aphids"
+        severity="Medium"
     )
     
     # Test 2: Potato blight with different session
     tester.test_metrics_query(
-        query="How to control potato blight disease organically?",
+        disease_name="Late Blight",
         plant_type="Potato",
         location="Punjab",
-        season="Rabi",  
+        season="Rabi",
+        severity="High",
         session_id="potato_query_session"
     )
     
-    # Test 3: Rice query with auto plant detection
+    # Test 3: Custom query format (override structured format)
     tester.test_metrics_query(
-        query="My rice crops are showing brown spots on leaves. What should I do?",
+        query="What are common diseases in tomatoes and how to treat them?",
+        disease_name="General Tomato Diseases",
+        plant_type="Tomato",
+        season="Summer",
+        location="Karnataka"
+    )
+    
+    # Test 4: Rice disease query 
+    tester.test_metrics_query(
+        disease_name="Brown Spot",
+        plant_type="Rice",
         season="Kharif",
-        location="West Bengal"
+        location="West Bengal",
+        severity="Medium"
     )
     
-    # Test 4: Apple pest query
+    # Test 5: Apple pest query
     tester.test_metrics_query(
-        query="Apple scab prevention and treatment methods for organic farming",
+        disease_name="Scab",
         plant_type="Apple",
-        disease="scab",
-        season="Spring"
+        season="Spring",
+        location="Himachal Pradesh",
+        severity="Low"
     )
     
-    # Test 5: Multiple queries with same session ID
+    # Test 6: Multiple queries with same session ID
     session_queries = [
         {
-            "query": "What is coconut root wilt disease?",
+            "disease_name": "Root Wilt",
             "plant_type": "Coconut",
-            "location": "Kerala"
+            "location": "Kerala",
+            "season": "Monsoon",
+            "severity": "High"
         },
         {
-            "query": "How to prevent coconut root wilt?",
+            "disease_name": "Leaf Blight", 
             "plant_type": "Coconut",
-            "location": "Kerala"
+            "location": "Kerala",
+            "season": "Monsoon",
+            "severity": "Medium"
         },
         {
-            "query": "Organic treatment for coconut root wilt",
+            "disease_name": "Stem Bleeding",
             "plant_type": "Coconut",
-            "location": "Kerala"
+            "location": "Kerala", 
+            "season": "Post-Monsoon",
+            "severity": "Low"
         }
     ]
     
@@ -323,15 +365,17 @@ def main():
         session_id="coconut_consultation_session"
     )
     
-    # Test 6: Error scenarios
+    # Test 7: Error scenarios
     tester.test_error_scenarios()
     
-    # Test 7: Long query test
+    # Test 8: Complex disease scenario with detailed context
     tester.test_metrics_query(
         query="I am a farmer in Maharashtra and I have been growing tomatoes for the past 5 years. Recently, I noticed that my tomato plants are showing yellow leaves with brown spots, and some fruits are developing dark patches. The weather has been humid and there has been intermittent rainfall. I want to know what disease this might be and what organic treatment options are available that won't harm beneficial insects in my farm.",
+        disease_name="Tomato Blight Complex",
         plant_type="Tomato",
         location="Maharashtra",
         season="Monsoon",
+        severity="Medium",
         session_id="detailed_consultation_session"
     )
     

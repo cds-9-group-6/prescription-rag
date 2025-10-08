@@ -2,6 +2,7 @@
 import logging
 # import uvicorn
 import os
+import threading
 from typing import Dict, List, Optional
 
 from dotenv import load_dotenv
@@ -666,6 +667,178 @@ class OllamaRag:
             raise RuntimeError(f"RAG query failed: {e}")
     
 
+    def _run_post_processing_activities(self, 
+                                      query_request: str, 
+                                      answer: str, 
+                                      result: Dict,
+                                      docs_unfiltered: List,
+                                      actual_docs_used: int,
+                                      query_time: float,
+                                      collection_name: str,
+                                      season: Optional[str],
+                                      location: Optional[str], 
+                                      disease: Optional[str],
+                                      session_id: str) -> None:
+        """
+        Run post-processing activities in background thread: GPT-4 evaluation, MLflow logging, and OTel metrics.
+        This method runs asynchronously to avoid blocking the main response.
+        """
+        try:
+            # Extract context from RAG result for judge model evaluation
+            context_for_judge = result.get("context", "")
+            if isinstance(context_for_judge, list):
+                # If context is a list of documents, join them
+                context_for_judge = "\n\n".join([str(doc) for doc in context_for_judge])
+            
+            # Evaluate the answer with the evaluator
+            evaluation_results = self.evaluator.evaluate_responses(
+                questions=[query_request],
+                generated_responses=[answer],
+                contexts=[context_for_judge] if context_for_judge else None,
+                use_judge_model=True,
+                session_id=session_id,
+                user_id="user_id",
+            )
+
+            
+            # Print results
+            print("\n" + "="*50)
+            print("EVALUATION RESULTS")
+            print("="*50)
+            print(f"Run ID: {evaluation_results['run_id']}")
+            print(f"Metrics: {evaluation_results['metrics']}")
+            
+            # Extract specific metrics
+            metrics = evaluation_results['metrics']
+            if 'answer_similarity/v1/score' in metrics:
+                print(f"Answer Similarity Score: {metrics['answer_similarity/v1/score']}")
+            
+            print("\nMetrics exported to OpenTelemetry Collector for Prometheus scraping")
+            logger.info("All metrics have been sent to OpenTelemetry Collector")
+        except Exception as e:
+            logger.error(f"Failed to log evaluation results to MLflow: {e}")
+        
+
+        # Log comprehensive RAG metrics to MLflow
+        # if mlflow_manager and mlflow_manager.is_available():
+        try:
+
+
+
+            # import mlflow
+        
+            # Update current trace with app config
+            app_config = {"version": "1.1.0", "model_in_use": "llama3.1:8b"}
+            current_env = os.getenv("APP_ENVIRONMENT", "unspecified")
+            current_app_version = app_config.get("version")
+            context_tags = {
+                "environment": current_env,
+                "app_version": current_app_version,}
+            mlflow.update_current_trace(tags=context_tags)
+
+
+            # Basic RAG metrics
+            mlflow.log_metric("rag_query_time_seconds", query_time)
+            mlflow.log_metric("rag_docs_unfiltered_count", len(docs_unfiltered))
+            # mlflow.log_metric("rag_docs_filtered_count", docs_filtered_count)
+            mlflow.log_metric("rag_docs_actually_used", actual_docs_used)
+            # mlflow.log_metric("rag_metadata_filter_used", 1 if has_metadata_filter else 0)
+            # mlflow.log_metric("rag_filter_effectiveness", docs_filtered_count / len(docs_unfiltered) if len(docs_unfiltered) > 0 else 0)
+            
+            # RAG configuration metrics
+            mlflow.log_param("rag_collection_used", collection_name)
+            mlflow.log_param("rag_plant_type_detected", collection_name)
+            mlflow.log_param("rag_has_season_filter", season is not None)
+            mlflow.log_param("rag_has_location_filter", location is not None)
+            mlflow.log_param("rag_has_disease_filter", disease is not None)
+            
+            # Query characteristics
+            mlflow.log_param("rag_query_length", len(query_request))
+            mlflow.log_metric("rag_query_word_count", len(query_request.split()))
+            
+            # Prompt effectiveness metrics
+            response_length = len(answer)
+            mlflow.log_metric("rag_response_length", response_length)
+            mlflow.log_metric("rag_response_word_count", len(answer.split()))
+            mlflow.log_metric("rag_docs_to_response_ratio", response_length / actual_docs_used if actual_docs_used > 0 else 0)
+            
+            # Filter metadata details
+            # if has_metadata_filter:
+
+            # logging the meta parametrs for the query
+            if season:
+                mlflow.log_param("rag_season_filter", season)
+            if location:
+                mlflow.log_param("rag_location_filter", location)
+            if disease:
+                mlflow.log_param("rag_disease_filter", disease)
+            
+            # Success metrics
+            mlflow.log_metric("rag_query_success", 1)
+            mlflow.log_metric("rag_fallback_used", 0)
+            
+            
+            if self.evaluator.otel_metrics_exporter:
+                try:
+                    # Collect parameters as labels
+                    otel_labels = {
+                        "rag_collection_used": collection_name,
+                        "rag_plant_type_detected": collection_name,
+                        "rag_has_season_filter": str(season is not None),
+                        "rag_has_location_filter": str(location is not None),
+                        "rag_has_disease_filter": str(disease is not None),
+                        "rag_query_length": str(len(query_request)),
+                    }
+                    if season:
+                        otel_labels["rag_season_filter"] = season
+                    if location:
+                        otel_labels["rag_location_filter"] = location
+                    if disease:
+                        otel_labels["rag_disease_filter"] = disease
+
+                    # Add static and model info
+                    otel_labels.update({
+                        "model_type": "text",
+                        "judge_model": getattr(self.evaluator, "openai_model", "unknown"),
+                    })
+
+                    # Collect metrics
+                    otel_metrics = {
+                        "rag_query_time_seconds": query_time,
+                        "rag_docs_unfiltered_count": len(docs_unfiltered),
+                        "rag_docs_actually_used": actual_docs_used,
+                        "rag_query_word_count": len(query_request.split()),
+                        "rag_response_length": len(answer),
+                        "rag_response_word_count": len(answer.split()),
+                        "rag_docs_to_response_ratio": len(answer) / actual_docs_used if actual_docs_used > 0 else 0,
+                        "rag_query_success": 1,
+                        "rag_fallback_used": 0,
+                    }
+
+                    self.evaluator.otel_metrics_exporter.send_rag_metrics(
+                        metrics_dict=otel_metrics,
+                        run_id=mlflow.active_run().info.run_id,
+                        session_id=session_id,
+                        user_id="user_id",
+                        additional_labels=otel_labels
+                    )
+                    logger.info("Metrics successfully sent to OpenTelemetry Collector")
+                except Exception as e:
+                    logger.error(f"Failed to send rag metrics to OTel Collector: {e}")
+
+
+
+            logger.info(f"✅ RAG metrics logged - Collection: {collection_name}, Docs: {actual_docs_used}, Time: {query_time:.2f}s")
+            
+        except Exception as e:
+            logger.warning(f"Failed to log RAG metrics to MLflow: {e}")
+        finally:
+            # Ensure proper cleanup of OTel resources
+            logger.info("Shutting down evaluator...")
+            self.evaluator.shutdown()
+
+        logger.info(f"✅ Background post-processing completed for collection: {collection_name}")
+
     # @mlflow.start_run()
     @mlflow.trace(span_type=SpanType.CHAIN,attributes={"span.name": "run_query_with_metrics"})
     def run_query_with_metrics(self, 
@@ -742,161 +915,28 @@ class OllamaRag:
                 end_time = time.time()
                 query_time = end_time - start_time
 
-                try:
-                    # Extract context from RAG result for judge model evaluation
-                    context_for_judge = result.get("context", "")
-                    if isinstance(context_for_judge, list):
-                        # If context is a list of documents, join them
-                        context_for_judge = "\n\n".join([str(doc) for doc in context_for_judge])
-                    
-                    # Evaluate the answer with the evaluator
-                    evaluation_results = self.evaluator.evaluate_responses(
-                        questions=[query_request],
-                        generated_responses=[answer],
-                        contexts=[context_for_judge] if context_for_judge else None,
-                        use_judge_model=True,
-                        session_id=session_id,
-                        user_id="user_id",
-                    )
-
-                    
-                    # Print results
-                    print("\n" + "="*50)
-                    print("EVALUATION RESULTS")
-                    print("="*50)
-                    print(f"Run ID: {evaluation_results['run_id']}")
-                    print(f"Metrics: {evaluation_results['metrics']}")
-                    
-                    # Extract specific metrics
-                    metrics = evaluation_results['metrics']
-                    if 'answer_similarity/v1/score' in metrics:
-                        print(f"Answer Similarity Score: {metrics['answer_similarity/v1/score']}")
-                    
-                    print("\nMetrics exported to OpenTelemetry Collector for Prometheus scraping")
-                    logger.info("All metrics have been sent to OpenTelemetry Collector")
-                except Exception as e:
-                    logger.error(f"Failed to log evaluation results to MLflow: {e}")
+                # Start background thread for post-processing activities (GPT-4 evaluation, MLflow logging, OTel metrics)
+                logger.info(f"🚀 Starting background post-processing for session: {session_id}")
+                background_thread = threading.Thread(
+                    target=self._run_post_processing_activities,
+                    args=(
+                        query_request,
+                        answer, 
+                        result,
+                        docs_unfiltered,
+                        actual_docs_used,
+                        query_time,
+                        collection_name,
+                        season,
+                        location,
+                        disease,
+                        session_id
+                    ),
+                    daemon=True  # Daemon thread won't block program exit
+                )
+                background_thread.start()
                 
-
-                # Log comprehensive RAG metrics to MLflow
-                # if mlflow_manager and mlflow_manager.is_available():
-                try:
-
-
-
-                    # import mlflow
-                
-                    # Update current trace with app config
-                    app_config = {"version": "1.1.0", "model_in_use": "llama3.1:8b"}
-                    current_env = os.getenv("APP_ENVIRONMENT", "unspecified")
-                    current_app_version = app_config.get("version")
-                    context_tags = {
-                        "environment": current_env,
-                        "app_version": current_app_version,}
-                    mlflow.update_current_trace(tags=context_tags)
-
-
-                    # Basic RAG metrics
-                    mlflow.log_metric("rag_query_time_seconds", query_time)
-                    mlflow.log_metric("rag_docs_unfiltered_count", len(docs_unfiltered))
-                    # mlflow.log_metric("rag_docs_filtered_count", docs_filtered_count)
-                    mlflow.log_metric("rag_docs_actually_used", actual_docs_used)
-                    # mlflow.log_metric("rag_metadata_filter_used", 1 if has_metadata_filter else 0)
-                    # mlflow.log_metric("rag_filter_effectiveness", docs_filtered_count / len(docs_unfiltered) if len(docs_unfiltered) > 0 else 0)
-                    
-                    # RAG configuration metrics
-                    mlflow.log_param("rag_collection_used", collection_name)
-                    mlflow.log_param("rag_plant_type_detected", collection_name)
-                    mlflow.log_param("rag_has_season_filter", season is not None)
-                    mlflow.log_param("rag_has_location_filter", location is not None)
-                    mlflow.log_param("rag_has_disease_filter", disease is not None)
-                    
-                    # Query characteristics
-                    mlflow.log_param("rag_query_length", len(query_request))
-                    mlflow.log_metric("rag_query_word_count", len(query_request.split()))
-                    
-                    # Prompt effectiveness metrics
-                    response_length = len(answer)
-                    mlflow.log_metric("rag_response_length", response_length)
-                    mlflow.log_metric("rag_response_word_count", len(answer.split()))
-                    mlflow.log_metric("rag_docs_to_response_ratio", response_length / actual_docs_used if actual_docs_used > 0 else 0)
-                    
-                    # Filter metadata details
-                    # if has_metadata_filter:
-
-                    # logging the meta parametrs for the query
-                    if season:
-                        mlflow.log_param("rag_season_filter", season)
-                    if location:
-                        mlflow.log_param("rag_location_filter", location)
-                    if disease:
-                        mlflow.log_param("rag_disease_filter", disease)
-                    
-                    # Success metrics
-                    mlflow.log_metric("rag_query_success", 1)
-                    mlflow.log_metric("rag_fallback_used", 0)
-                    
-                    
-                    if self.evaluator.otel_metrics_exporter:
-                        try:
-                            # Collect parameters as labels
-                            otel_labels = {
-                                "rag_collection_used": collection_name,
-                                "rag_plant_type_detected": collection_name,
-                                "rag_has_season_filter": str(season is not None),
-                                "rag_has_location_filter": str(location is not None),
-                                "rag_has_disease_filter": str(disease is not None),
-                                "rag_query_length": str(len(query_request)),
-                            }
-                            if season:
-                                otel_labels["rag_season_filter"] = season
-                            if location:
-                                otel_labels["rag_location_filter"] = location
-                            if disease:
-                                otel_labels["rag_disease_filter"] = disease
-
-                            # Add static and model info
-                            otel_labels.update({
-                                "model_type": "text",
-                                "judge_model": getattr(self.evaluator, "openai_model", "unknown"),
-                            })
-
-                            # Collect metrics
-                            otel_metrics = {
-                                "rag_query_time_seconds": query_time,
-                                "rag_docs_unfiltered_count": len(docs_unfiltered),
-                                "rag_docs_actually_used": actual_docs_used,
-                                "rag_query_word_count": len(query_request.split()),
-                                "rag_response_length": len(answer),
-                                "rag_response_word_count": len(answer.split()),
-                                "rag_docs_to_response_ratio": len(answer) / actual_docs_used if actual_docs_used > 0 else 0,
-                                "rag_query_success": 1,
-                                "rag_fallback_used": 0,
-                            }
-
-                            self.evaluator.otel_metrics_exporter.send_metrics(
-                                metrics_dict=otel_metrics,
-                                run_id=mlflow.active_run().info.run_id,
-                                session_id=session_id,
-                                user_id="user_id",
-                                additional_labels=otel_labels
-                            )
-                            logger.info("Metrics successfully sent to OpenTelemetry Collector")
-                        except Exception as e:
-                            logger.error(f"Failed to send rag metrics to OTel Collector: {e}")
-
-
-
-                    logger.info(f"✅ RAG metrics logged - Collection: {collection_name}, Docs: {actual_docs_used}, Time: {query_time:.2f}s")
-                    
-                except Exception as e:
-                    logger.warning(f"Failed to log RAG metrics to MLflow: {e}")
-                finally:
-                    # Ensure proper cleanup of OTel resources
-                    logger.info("Shutting down evaluator...")
-                    self.evaluator.shutdown()
-                    
-                logger.info(f"✅ Query completed successfully using collection: {collection_name} with {actual_docs_used} documents in {query_time:.2f}s")
+                logger.info(f"✅ Query completed successfully using collection: {collection_name} with {actual_docs_used} documents in {query_time:.2f}s (post-processing running in background)")
 
                 return answer
 
