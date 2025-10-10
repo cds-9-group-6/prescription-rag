@@ -131,6 +131,7 @@ class OllamaRag:
             "medicine_recommendations": {{
                 "primary_treatment": {{
                     "medicine_name": "Primary medicine/chemical name",
+                    "medicine_type": "Chemical/Organic",
                     "active_ingredient": "Active ingredient name",
                     "dosage": "Concentration and quantity per application",
                     "application_method": "Spray/Soil application/Foliar",
@@ -141,6 +142,7 @@ class OllamaRag:
                 }},
                 "secondary_treatment": {{
                     "medicine_name": "Secondary/supportive medicine if needed",
+                    "medicine_type": "Chemical/Organic",
                     "active_ingredient": "Active ingredient name",
                     "dosage": "Concentration and quantity",
                     "application_method": "Application method",
@@ -151,10 +153,11 @@ class OllamaRag:
                 }},
                 "organic_alternatives": [
                     {{
-                        "medicine_name": "Secondary/supportive medicine if needed",
+                        "medicine_name": "Organic treatment name",
+                        "medicine_type": "Organic",
                         "active_ingredient": "Active ingredient name",
                         "dosage": "Concentration and quantity",
-                        "application_method": "Application method",
+                        "application_method": "How to prepare and How to apply",
                         "frequency": "Frequency of application",
                         "duration": "Total treatment period",
                         "when_to_use": "Conditions when to use this",
